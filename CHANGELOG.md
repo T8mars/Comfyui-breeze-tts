@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 — 2026-08-31
+
+- Replaces file-descriptor warning suppression with direct CUDA graph cleanup.
+- Selects Transformers mask-helper arguments from supported version boundaries without dynamic imports.
+- Resolves two informational Registry scanner false positives while preserving Transformers 4.57 and 5.x compatibility.
+
 ## 0.1.0 — 2026-08-31
 
 - Initial Comfy Registry release under Publisher ID `t8star`.

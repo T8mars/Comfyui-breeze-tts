@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import atexit
-import contextlib
 import gc
 import importlib.util
 import logging
-import os
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -523,54 +520,18 @@ def resume_bundle_to_device(bundle: BreezeBundle) -> None:
     _register_many_with_comfy(bundle.patchers)
 
 
-_POOL_WARN_LINES = (
-    b"uncaptured free of a captured allocation",
-    b"This is technically allowed, but may indicate you are losing",
-)
-
-
-@contextlib.contextmanager
-def _silence_captured_pool_warnings():
-    """Park fd 2 while CUDA-graph pools are released and re-emit everything else.
-
-    Under the cudaMallocAsync backend the allocator prints two-line C++
-    warnings to stderr for every graph-pool tensor freed outside capture.
-    No log level or Python filter reaches them, so stderr is parked in a
-    temp file for the release and replayed minus those two lines; output
-    from other threads is preserved.
-    """
-    try:
-        saved = os.dup(2)
-    except OSError:
-        yield
-        return
-    with tempfile.TemporaryFile() as park:
-        os.dup2(park.fileno(), 2)
-        try:
-            yield
-        finally:
-            os.dup2(saved, 2)
-            os.close(saved)
-            park.seek(0)
-            for line in park.read().splitlines(keepends=True):
-                if any(marker in line for marker in _POOL_WARN_LINES):
-                    continue
-                os.write(2, line)
-
-
 def release_depth_graphs(model: nn.Module | None) -> None:
-    """Drop captured CUDA graphs and their pool tensors without warning spam."""
+    """Release optional graph-capture state before unloading the model."""
     runners = getattr(model, "_breeze_depth_runners", None) or {}
     if not any(r._graph_prefill is not None for r in runners.values()):
         model._breeze_depth_runners = runners
         return
-    with _silence_captured_pool_warnings():
-        for runner in runners.values():
-            runner._graph_prefill = None
-            runner._graph_steps = None
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
+    for runner in runners.values():
+        runner._graph_prefill = None
+        runner._graph_steps = None
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
     model._breeze_depth_runners = runners
 
 

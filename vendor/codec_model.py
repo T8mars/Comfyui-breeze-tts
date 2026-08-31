@@ -2,8 +2,8 @@
 
 Only the 12 Hz tokenizer (v2) is vendored. Patched for transformers 4.57-5.16:
 check_model_inputs is shimmed with a no-op decorator (the upstream symbol kept
-changing calling convention), and mask kwargs are filtered per installed
-signature (cache_position was removed in transformers>=5.9).
+changing calling convention), and mask kwargs are selected from the installed
+Transformers version (cache_position was removed in transformers>=5.9).
 """
 
 from __future__ import annotations
@@ -14,10 +14,11 @@ from typing import Callable, Optional, Union, List
 
 import numpy as np
 import torch
+from packaging.version import Version
 from torch import nn
 from torch.nn import Parameter
 from torch.nn import functional as F
-from transformers import MimiConfig, MimiModel
+from transformers import MimiConfig, MimiModel, __version__ as _transformers_version
 from transformers.activations import ACT2FN
 from transformers.cache_utils import Cache, DynamicCache
 from transformers.integrations import use_kernel_forward_from_hub
@@ -33,6 +34,11 @@ from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
 from transformers.processing_utils import Unpack
 from transformers.utils import ModelOutput, auto_docstring, logging
 from transformers.utils.deprecation import deprecate_kwarg
+
+
+_TRANSFORMERS_VERSION = Version(_transformers_version)
+_MASK_EMBED_KEY = "inputs_embeds" if _TRANSFORMERS_VERSION >= Version("5.0.0") else "input_embeds"
+_MASK_ACCEPTS_CACHE_POSITION = _TRANSFORMERS_VERSION < Version("5.9.0")
 
 
 def check_model_inputs(*args, **kwargs):
@@ -560,41 +566,24 @@ class Qwen3TTSTokenizerV2DecoderTransformerModel(Qwen3TTSTokenizerV2DecoderPreTr
 
         # It may already have been prepared by e.g. `generate`
         if not isinstance(causal_mask_mapping := attention_mask, dict):
-            # Prepare mask arguments. create_causal_mask renamed its embedding
-            # kwarg from input_embeds (<5) to inputs_embeds (>=5); pick
-            # whichever this installation accepts.
-            _mask_embed_key = (
-                "inputs_embeds"
-                if "inputs_embeds" in __import__("inspect").signature(create_causal_mask).parameters
-                else "input_embeds"
-            )
+            # Mask helper arguments changed at stable Transformers boundaries.
             mask_kwargs = {
                 "config": self.config,
-                _mask_embed_key: inputs_embeds,
+                _MASK_EMBED_KEY: inputs_embeds,
                 "attention_mask": attention_mask,
-                "cache_position": cache_position,
                 "past_key_values": past_key_values,
                 "position_ids": position_ids,
             }
-            # transformers >=5.9 dropped cache_position from the mask helpers;
-            # pass only the kwargs each installed function actually accepts.
-            import inspect as _inspect
-
-            def _mask_supported(fn):
-                params = _inspect.signature(fn).parameters
-                if any(p.kind is _inspect.Parameter.VAR_KEYWORD for p in params.values()):
-                    return mask_kwargs
-                return {k: v for k, v in mask_kwargs.items() if k in params}
+            if _MASK_ACCEPTS_CACHE_POSITION:
+                mask_kwargs["cache_position"] = cache_position
 
             # Create the masks
             causal_mask_mapping = {
-                "full_attention": create_causal_mask(**_mask_supported(create_causal_mask)),
+                "full_attention": create_causal_mask(**mask_kwargs),
             }
             # The sliding window alternating layers are not always activated depending on the config
             if self.has_sliding_layers:
-                causal_mask_mapping["sliding_attention"] = create_sliding_window_causal_mask(
-                    **_mask_supported(create_sliding_window_causal_mask)
-                )
+                causal_mask_mapping["sliding_attention"] = create_sliding_window_causal_mask(**mask_kwargs)
 
         hidden_states = inputs_embeds
 

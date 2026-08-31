@@ -47,4 +47,4 @@ python -m pip install -r Comfyui-breeze-tts/requirements.txt
 - GitHub：<https://github.com/T8mars/Comfyui-breeze-tts>
 - Comfy Registry Publisher：`t8star`
 - Registry 节点 ID：`comfyui-breeze-tts-T8`
-- 当前版本：`0.1.0`
+- 当前版本：`0.1.1`
