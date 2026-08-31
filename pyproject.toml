@@ -1,0 +1,34 @@
+[project]
+name = "comfyui-breeze-tts-T8"
+version = "0.1.0"
+description = "Composable Breeze TTS 2 voice design, cloning, and direction nodes for ComfyUI"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+license = { file = "LICENSE" }
+authors = [{ name = "T8star-Aix" }]
+classifiers = [
+  "Operating System :: Microsoft :: Windows",
+  "Environment :: GPU :: NVIDIA CUDA",
+]
+dependencies = [
+  "accelerate>=1.1,<2",
+  "huggingface_hub>=0.34,<2",
+  "packaging>=24",
+  "safetensors>=0.4",
+  "soundfile>=0.12",
+  "tqdm>=4.66",
+]
+
+[project.urls]
+Repository = "https://github.com/T8mars/Comfyui-breeze-tts"
+Documentation = "https://github.com/T8mars/Comfyui-breeze-tts#readme"
+"Bug Tracker" = "https://github.com/T8mars/Comfyui-breeze-tts/issues"
+
+[tool.comfy]
+PublisherId = "t8star"
+DisplayName = "Breeze TTS 2 · T8star-Aix"
+requires-comfyui = ">=0.33.0"
+
+[tool.breeze-tts-T8]
+transformers = ">=4.57,<6"
+official_model_revision = "c1c8ca18b70b30822735633991d9ebf4898e47d4"

@@ -1,0 +1,26 @@
+{
+  "1": {
+    "class_type": "T8_BreezeTTS_ModelLoader",
+    "inputs": {"dtype": "auto", "device": "auto", "attention": "auto", "download_if_missing": true, "accept_model_license": false}
+  },
+  "2": {
+    "class_type": "T8_BreezeTTS_DesignRequest",
+    "inputs": {"text": "[笑] 欢迎使用 Breeze TTS 2。", "voice_description": "一位温柔自信的年轻女性，声音清晰，语气亲切。", "cfg_scale": 4.0}
+  },
+  "3": {
+    "class_type": "T8_BreezeTTS_GenerationSettings",
+    "inputs": {"max_new_tokens": 1500, "temperature": 0.9, "top_k": 50, "top_p": 1.0, "repetition_penalty": 1.1, "depth_temperature": 0.9, "depth_top_k": 50, "depth_top_p": 1.0, "seed": 42}
+  },
+  "4": {
+    "class_type": "T8_BreezeTTS_Generate",
+    "inputs": {"model": ["1", 0], "request": ["2", 0], "settings": ["3", 0]}
+  },
+  "5": {
+    "class_type": "SaveAudio",
+    "inputs": {"audio": ["4", 0], "filename_prefix": "audio/T8_Breeze_design"}
+  },
+  "6": {
+    "class_type": "PreviewAudio",
+    "inputs": {"audio": ["4", 0]}
+  }
+}

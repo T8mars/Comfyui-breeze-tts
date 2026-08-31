@@ -1,0 +1,10 @@
+# Deliberately do not pin or install torch, torchaudio, torchvision, transformers,
+# tokenizers, or numpy. These protected packages belong to the ComfyUI host.
+# ComfyUI-Manager installs these lightweight dependencies through its standard
+# dependency pipeline; the node never invokes pip at runtime.
+accelerate>=1.1,<2
+huggingface_hub>=0.34,<2
+packaging>=24
+safetensors>=0.4
+soundfile>=0.12
+tqdm>=4.66

@@ -1,0 +1,21 @@
+{
+  "1": {
+    "class_type": "T8_BreezeTTS_ModelLoader",
+    "inputs": {"dtype": "auto", "device": "auto", "attention": "auto", "download_if_missing": true, "accept_model_license": false}
+  },
+  "2": {"class_type": "LoadAudio", "inputs": {"audio": "reference.wav", "audioUI": ""}},
+  "3": {
+    "class_type": "T8_BreezeTTS_DirectionRequest",
+    "inputs": {"text": "我们需要认真讨论一下昨晚发生的事情。", "reference_audio": ["2", 0], "reference_text": "请替换为参考音频的准确逐字稿。", "direction": "语速放慢，语气克制而严肃。", "cfg_scale": 4.0}
+  },
+  "4": {
+    "class_type": "T8_BreezeTTS_GenerationSettings",
+    "inputs": {"max_new_tokens": 1500, "temperature": 0.9, "top_k": 50, "top_p": 1.0, "repetition_penalty": 1.1, "depth_temperature": 0.9, "depth_top_k": 50, "depth_top_p": 1.0, "seed": 42}
+  },
+  "5": {
+    "class_type": "T8_BreezeTTS_Generate",
+    "inputs": {"model": ["1", 0], "request": ["3", 0], "settings": ["4", 0]}
+  },
+  "6": {"class_type": "SaveAudio", "inputs": {"audio": ["5", 0], "filename_prefix": "audio/T8_Breeze_direction"}}
+}
+

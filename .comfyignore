@@ -1,0 +1,10 @@
+# Repository automation is not needed inside the installed custom node.
+.github/
+
+# Development and generated files.
+tests/
+test_reports/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
