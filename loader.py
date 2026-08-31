@@ -6,6 +6,7 @@ import atexit
 import gc
 import importlib.util
 import logging
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ import torch
 from torch import nn
 
 from . import int8
+from . import model_integrity
 from . import native
 from .vendor.codec_config import Qwen3TTSTokenizerV2Config
 from .vendor.codec_model import Qwen3TTSTokenizerV2Model
@@ -34,6 +36,39 @@ DTYPE_OPTIONS = ["auto", "bf16", "fp32"]
 DEVICE_OPTIONS = ["auto", "cuda", "cpu"]
 ATTENTION_OPTIONS = ["auto", "eager", "sdpa", "flash_attention", "sageattention"]
 DECODE_MODE_OPTIONS = ["eager", "cuda_graphs"]
+
+# Model lifecycle operations and generation share this lock.  ComfyUI can call
+# its unload hooks from worker/management threads, so clearing a live bundle
+# must wait until the current inference has finished.
+GENERATION_LOCK = threading.Lock()
+_GENERATION_STATE_LOCK = threading.Lock()
+_GENERATION_OWNER: int | None = None
+
+
+def try_begin_generation() -> bool:
+    """Acquire the shared generation/lifecycle lock without queueing."""
+
+    global _GENERATION_OWNER
+    if not GENERATION_LOCK.acquire(blocking=False):
+        return False
+    with _GENERATION_STATE_LOCK:
+        _GENERATION_OWNER = threading.get_ident()
+    return True
+
+
+def end_generation() -> None:
+    global _GENERATION_OWNER
+    with _GENERATION_STATE_LOCK:
+        owner = _GENERATION_OWNER
+        if owner != threading.get_ident():
+            raise RuntimeError("Breeze TTS 2 generation lock was released by a non-owner thread.")
+        _GENERATION_OWNER = None
+    GENERATION_LOCK.release()
+
+
+def generation_owned_by_current_thread() -> bool:
+    with _GENERATION_STATE_LOCK:
+        return _GENERATION_OWNER == threading.get_ident()
 
 try:
     import folder_paths
@@ -109,24 +144,38 @@ def register_model_folder() -> None:
             folder_paths.add_model_folder_path(MODEL_FOLDER_NAME, str(base))
 
 
+def _model_file_report(model_dir: Path, weights_name: str) -> model_integrity.ModelIntegrityReport:
+    return model_integrity.inspect_model_dir(model_dir, weights_name)
+
+
 def _has_component_files(model_dir: Path, weights_name: str) -> bool:
-    if not (model_dir / "config.json").is_file():
-        return False
-    if not (model_dir / "audio_tokenizer" / "model.safetensors").is_file():
-        return False
-    return (model_dir / weights_name).is_file()
+    """Compatibility wrapper retained for callers that expect a boolean."""
+
+    return _model_file_report(model_dir, weights_name).complete
 
 
 def _download_model_files(repo_id: str, weights_name: str, dest: Path) -> None:
     from huggingface_hub import snapshot_download
 
     logger.info("Downloading official %s at revision %s to %s", repo_id, MODEL_REVISION, dest)
-    snapshot_download(
-        repo_id=repo_id,
-        revision=MODEL_REVISION,
-        local_dir=str(dest),
-        endpoint=HF_ENDPOINT,
-    )
+    try:
+        snapshot_download(
+            repo_id=repo_id,
+            revision=MODEL_REVISION,
+            local_dir=str(dest),
+            endpoint=HF_ENDPOINT,
+        )
+    except Exception as exc:
+        report = _model_file_report(dest, weights_name)
+        raise RuntimeError(
+            "Breeze TTS 2 模型下载/续传失败。"
+            + model_integrity.repair_guidance(report)
+            + f" 原始错误: {type(exc).__name__}: {exc}"
+        ) from exc
+
+    report = _model_file_report(dest, weights_name)
+    if not report.complete:
+        raise RuntimeError("下载结束后模型完整性检查仍未通过。" + model_integrity.repair_guidance(report))
 
 
 def resolve_model_dir(repo_choice: str, download_if_missing: bool) -> tuple[Path, str]:
@@ -134,15 +183,27 @@ def resolve_model_dir(repo_choice: str, download_if_missing: bool) -> tuple[Path
     if repo_id is None:
         raise ValueError(f"Unknown model choice: {repo_choice!r}")
     safe_name = _safe_repo_name(repo_id)
+    reports: list[model_integrity.ModelIntegrityReport] = []
     for base in model_dirs():
         candidate = base / safe_name
-        if _has_component_files(candidate, weights_name):
+        report = _model_file_report(candidate, weights_name)
+        reports.append(report)
+        if report.complete:
             return candidate, weights_name
-    dest = model_dirs()[0] / safe_name
+    # Prefer continuing an existing partial snapshot instead of creating a
+    # second copy in the primary model directory.
+    partial = next((report.model_dir for report in reports if report.model_dir.exists()), None)
+    dest = partial or (model_dirs()[0] / safe_name)
     if not download_if_missing:
+        details = " | ".join(
+            f"{report.model_dir}: {report.summary()}" for report in reports if report.model_dir.exists()
+        )
+        if not details:
+            details = ", ".join(str(report.model_dir) for report in reports)
         raise FileNotFoundError(
-            f"Breeze TTS 2 model files not found in {[str(d / safe_name) for d in model_dirs()]}. "
-            "Enable download_if_missing on the Breeze TTS 2 Load Model node or place the checkpoint there."
+            f"Breeze TTS 2 模型不存在或不完整: {details}。"
+            "请启用 T8 模型加载器的 download_if_missing 以从固定 revision 续传，"
+            "或按提示补齐对应文件。"
         )
     _download_model_files(repo_id, weights_name, dest)
     return dest, weights_name
@@ -334,12 +395,55 @@ def _empty_accelerator_cache() -> None:
         torch.cuda.empty_cache()
 
 
+def _unload_request_targets_bundle(bundle: "BreezeBundle", args: tuple, kwargs: dict) -> bool:
+    """Return whether a ComfyUI clone-unload request targets this bundle.
+
+    ComfyUI also calls ``unload_model_and_clones`` for unrelated image/video
+    models while preparing VRAM.  The old unconditional hook could therefore
+    tear down Breeze immediately before generation.
+    """
+
+    target_ids = {id(bundle.model), id(bundle.codec)}
+    for patcher in bundle.patchers:
+        target_ids.add(id(patcher))
+        target_ids.add(id(getattr(patcher, "model", None)))
+
+    seen: set[int] = set()
+
+    def contains(value, depth: int = 0) -> bool:
+        if value is None or depth > 3:
+            return False
+        value_id = id(value)
+        if value_id in target_ids:
+            return True
+        if value_id in seen:
+            return False
+        seen.add(value_id)
+        if isinstance(value, dict):
+            return any(contains(item, depth + 1) for item in value.values())
+        if isinstance(value, (list, tuple, set, frozenset)):
+            return any(contains(item, depth + 1) for item in value)
+        for attribute in ("model", "patcher", "real_model"):
+            try:
+                nested = getattr(value, attribute, None)
+            except Exception:
+                continue
+            if nested is not None and contains(nested, depth + 1):
+                return True
+        return False
+
+    return contains(args) or contains(kwargs)
+
+
 def install_comfy_unload_hook() -> None:
     if mm is None or getattr(mm, "_breeze_tts2_unload_hook_installed", False):
         return
     original_unload_all = mm.unload_all_models
 
     def unload_all_with_breeze(*args, **kwargs):
+        if generation_owned_by_current_thread():
+            logger.debug("Ignoring re-entrant ComfyUI unload_all_models during Breeze generation.")
+            return None
         bundle = _ACTIVE_BUNDLE
         if bundle is not None:
             unload_breeze_bundle(bundle, reason="ComfyUI unload_all_models")
@@ -351,7 +455,10 @@ def install_comfy_unload_hook() -> None:
 
         def unload_clones_with_breeze(*args, **kwargs):
             bundle = _ACTIVE_BUNDLE
-            if bundle is not None:
+            if bundle is not None and _unload_request_targets_bundle(bundle, args, kwargs):
+                if generation_owned_by_current_thread():
+                    logger.debug("Ignoring re-entrant Breeze clone unload during generation.")
+                    return None
                 unload_breeze_bundle(bundle, reason="ComfyUI unload_model_and_clones")
             return original_unload_clones(*args, **kwargs)
 
@@ -522,6 +629,8 @@ def resume_bundle_to_device(bundle: BreezeBundle) -> None:
 
 def release_depth_graphs(model: nn.Module | None) -> None:
     """Release optional graph-capture state before unloading the model."""
+    if model is None:
+        return
     runners = getattr(model, "_breeze_depth_runners", None) or {}
     if not any(r._graph_prefill is not None for r in runners.values()):
         model._breeze_depth_runners = runners
@@ -546,7 +655,7 @@ def _release_active_graphs_at_exit() -> None:
 atexit.register(_release_active_graphs_at_exit)
 
 
-def unload_breeze_bundle(bundle: BreezeBundle | None, reason: str = "unload", hard: bool = True) -> None:
+def _unload_breeze_bundle_locked(bundle: BreezeBundle | None, reason: str, hard: bool) -> None:
     global _ACTIVE_BUNDLE, _ACTIVE_LOAD_KEY
     if bundle is None:
         return
@@ -576,3 +685,12 @@ def unload_breeze_bundle(bundle: BreezeBundle | None, reason: str = "unload", ha
         _ACTIVE_LOAD_KEY = None
     gc.collect()
     _empty_accelerator_cache()
+
+
+def unload_breeze_bundle(bundle: BreezeBundle | None, reason: str = "unload", hard: bool = True) -> None:
+    """Unload a bundle only after any active Breeze generation has completed."""
+
+    if generation_owned_by_current_thread():
+        raise RuntimeError("不能在 Breeze TTS 2 正在生成的同一线程中卸载模型。")
+    with GENERATION_LOCK:
+        _unload_breeze_bundle_locked(bundle, reason, hard)

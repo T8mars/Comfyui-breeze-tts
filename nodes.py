@@ -11,7 +11,6 @@ import hashlib
 import json
 import random
 import secrets
-import threading
 import time
 from collections import OrderedDict
 from typing import Any
@@ -25,7 +24,7 @@ CATEGORY = "T8star-Aix/Audio/Breeze TTS"
 MODEL_TYPE = "BREEZE_T8_MODEL"
 REQUEST_TYPE = "BREEZE_T8_REQUEST"
 SETTINGS_TYPE = "BREEZE_T8_SETTINGS"
-_GENERATION_LOCK = threading.Lock()
+_GENERATION_LOCK = loader.GENERATION_LOCK
 _REFERENCE_CACHE: OrderedDict[str, torch.Tensor] = OrderedDict()
 _REFERENCE_CACHE_LIMIT = 8
 
@@ -75,14 +74,29 @@ class BreezeT8ModelLoader:
     def load(self, dtype, device, attention, download_if_missing, accept_model_license):
         if not bool(accept_model_license):
             raise RuntimeError("请先阅读节点目录中的 MODEL_LICENSE，并勾选 accept_model_license。")
-        bundle = loader.load_breeze_bundle(
-            loader.BF16_LABEL,
-            dtype,
-            device,
-            attention,
-            bool(download_if_missing),
-            "eager",
-        )
+        try:
+            bundle = loader.load_breeze_bundle(
+                loader.BF16_LABEL,
+                dtype,
+                device,
+                attention,
+                bool(download_if_missing),
+                "eager",
+            )
+        except torch.OutOfMemoryError as exc:
+            raise RuntimeError(
+                "Breeze TTS 2 模型加载时显存不足。请停止其他工作流、卸载占用显存的模型，"
+                "或把 device 改为 CPU 后重试；无需重新安装 Torch/Transformers。"
+            ) from exc
+        except Exception as exc:
+            # Integrity/download failures already contain exact file names;
+            # this suffix also makes native/tokenizer load failures actionable.
+            raise RuntimeError(
+                f"Breeze TTS 2 模型加载失败: {type(exc).__name__}: {exc}。"
+                "修复顺序：保持 download_if_missing=true 再执行以续传；"
+                "若提示某个文件损坏，关闭 ComfyUI 后仅删除该文件再重试；"
+                "不要用本节点覆盖 ComfyUI 的 Torch、Transformers、Tokenizers 或 NumPy。"
+            ) from exc
         info = {
             "model_dir": str(bundle.model_dir),
             "revision": loader.MODEL_REVISION,
@@ -250,6 +264,13 @@ def _generate_audio(bundle, request: dict[str, Any], settings: dict[str, Any]) -
         wav, sample_rate = runtime.comfy_audio_to_tensor(ref_audio)
         if wav.numel() == 0:
             raise ValueError("参考音频为空。")
+        if sample_rate <= 0:
+            raise ValueError(f"参考音频采样率无效: {sample_rate}。")
+        # Check the original CPU waveform before hashing, resampling or codec
+        # encoding.  A long reference must not reach the GPU and OOM first.
+        seconds = wav.numel() / float(sample_rate)
+        if seconds > runtime.MAX_REFERENCE_SECONDS:
+            raise ValueError(f"参考音频约 {seconds:.1f} 秒，超过 {runtime.MAX_REFERENCE_SECONDS:.0f} 秒上限。")
         cache_key = _reference_cache_key(bundle, wav, sample_rate)
         ref_codes = _REFERENCE_CACHE.get(cache_key)
         if ref_codes is not None:
@@ -261,9 +282,6 @@ def _generate_audio(bundle, request: dict[str, Any], settings: dict[str, Any]) -
             _REFERENCE_CACHE.move_to_end(cache_key)
             while len(_REFERENCE_CACHE) > _REFERENCE_CACHE_LIMIT:
                 _REFERENCE_CACHE.popitem(last=False)
-        seconds = ref_codes.shape[0] / runtime.FRAMES_PER_SECOND
-        if seconds > runtime.MAX_REFERENCE_SECONDS:
-            raise ValueError(f"参考音频约 {seconds:.1f} 秒，超过 {runtime.MAX_REFERENCE_SECONDS:.0f} 秒上限。")
 
     if ref_codes is None:
         cond = runtime.design_segments(text, instruction)
@@ -348,7 +366,7 @@ class BreezeT8Generate:
     DESCRIPTION = "执行 Breeze TTS 2 推理并返回标准 ComfyUI AUDIO。"
 
     def generate(self, model, request, settings):
-        if not _GENERATION_LOCK.acquire(blocking=False):
+        if not loader.try_begin_generation():
             raise RuntimeError("Breeze TTS 2 正在生成；为保护缓存与显存，T8 节点会串行执行。")
         try:
             audio, metrics = _generate_audio(model, request, settings)
@@ -357,7 +375,7 @@ class BreezeT8Generate:
                 torch.cuda.empty_cache()
             raise RuntimeError("Breeze TTS 2 显存不足。已清理临时缓存；可降低其他模型显存占用后重试。") from exc
         finally:
-            _GENERATION_LOCK.release()
+            loader.end_generation()
         info = {
             "mode": request.get("mode"),
             "sample_rate": int(audio["sample_rate"]),

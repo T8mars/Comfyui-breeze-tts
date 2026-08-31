@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 — 2026-09-01
+
+- Validates all required model, tokenizer, codec, index, and indexed shard files before loading, with resumable-download repair guidance.
+- Rejects reference audio longer than 60 seconds before codec/GPU encoding.
+- Serializes unload operations with generation and limits clone-unload hooks to the Breeze bundle actually being unloaded.
+- Adds dependency-free model-integrity tests plus generation/unload guard tests.
+
 ## 0.1.1 — 2026-08-31
 
 - Replaces file-descriptor warning suppression with direct CUDA graph cleanup.

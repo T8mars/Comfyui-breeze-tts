@@ -18,6 +18,9 @@ python -m pip install -r Comfyui-breeze-tts/requirements.txt
 
 `ComfyUI/models/breeze_tts/BreezeBlue_Breeze-TTS-2`
 
+加载前会检查模型配置、Tokenizer、Codec、权重索引及索引引用的每个分片。中断的下载可在
+`download_if_missing=true` 时继续；检查失败会显示具体缺失/损坏文件和修复路径。
+
 ## 兼容性
 
 - Python：3.10+
@@ -37,6 +40,7 @@ python -m pip install -r Comfyui-breeze-tts/requirements.txt
 `examples/` 提供 Design、Clone、Direction 三份 API 工作流。导入前请把模型加载器的 `accept_model_license` 改为 `true`；Clone/Direction 还需替换 `reference.wav` 与准确逐字稿。
 
 声音克隆与声音导演必须提供参考音频的准确逐字稿。模型仅限其许可证允许的研究、教育与非商业用途，详见 `MODEL_LICENSE`。
+参考音频最长 60 秒，节点会在上传到 GPU 和 Codec 编码前检查原始波形时长。
 
 ## 来源与声明
 
@@ -47,4 +51,4 @@ python -m pip install -r Comfyui-breeze-tts/requirements.txt
 - GitHub：<https://github.com/T8mars/Comfyui-breeze-tts>
 - Comfy Registry Publisher：`t8star`
 - Registry 节点 ID：`comfyui-breeze-tts-T8`
-- 当前版本：`0.1.1`
+- 当前版本：`0.1.2`
