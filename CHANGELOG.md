@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.7 — 2026-09-03
+
+- Aligns the node package with Voice Studio 0.2.7 and its complete reference-audio Voice Library 2.1 workflow.
+- Keeps all eight node contracts, four frontend workflows, inline vocal events, and `transformers>=4.57,<6` compatibility unchanged.
+
 ## 0.2.6 — 2026-09-03
 
 - Shows the canonical Chinese and English inline vocal-event syntax directly on every frontend workflow canvas.

@@ -13,7 +13,7 @@ from typing import Any
 from uuid import UUID
 
 
-PACKAGE_VERSION = "0.2.6"
+PACKAGE_VERSION = "0.2.7"
 EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "examples"
 INLINE_EVENT_GUIDE = (
     "行内声音事件｜中文：[笑] [咳嗽] [清嗓子] [叹气]｜"
