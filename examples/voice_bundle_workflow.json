@@ -38,7 +38,7 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_ModelLoader",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.8"
+        "ver": "0.2.9"
       },
       "widgets_values": [
         "auto",
@@ -91,7 +91,7 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_VoiceBundleRequest",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.8"
+        "ver": "0.2.9"
       },
       "widgets_values": [
         "D:/voices/my-role.t8voice.zip",
@@ -132,7 +132,7 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_GenerationSettings",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.8"
+        "ver": "0.2.9"
       },
       "widgets_values": [
         1500,
@@ -200,7 +200,7 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_Generate",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.8"
+        "ver": "0.2.9"
       },
       "widgets_values": [],
       "title": "4 生成音频",
@@ -369,7 +369,7 @@
     },
     "frontendVersion": "1.24.4",
     "t8_example_kind": "ui_workflow",
-    "t8_node_version": "0.2.8"
+    "t8_node_version": "0.2.9"
   },
   "version": 0.4
 }

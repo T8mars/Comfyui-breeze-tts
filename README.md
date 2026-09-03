@@ -1,6 +1,6 @@
 # comfyui-breeze-tts-T8
 
-非官方 Breeze TTS 2 ComfyUI 配套节点。v0.2.8 提供 8 个可组合节点、四份可直接拖入画布的前端工作流，并在每份工作流中展示行内声音事件语法。
+非官方 Breeze TTS 2 ComfyUI 配套节点。v0.2.9 提供 8 个可组合节点、四份可直接拖入画布的前端工作流，并在每份工作流中展示行内声音事件语法。
 
 ## 安装
 
@@ -122,4 +122,4 @@ Request 和 Settings 会在模型恢复到 GPU 之前验证。空台词、空逐
 - GitHub：<https://github.com/T8mars/Comfyui-breeze-tts>
 - Comfy Registry Publisher：`t8star`
 - Registry 节点 ID：`comfyui-breeze-tts-T8`
-- 当前版本：`0.2.8`
+- 当前版本：`0.2.9`

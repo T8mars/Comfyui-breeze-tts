@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.9 — 2026-09-03
+
+- Adds the T8star-Aix GitHub, Hugging Face, Bilibili, and YouTube links to the package documentation.
+- Keeps all eight node contracts, four frontend workflows, inline vocal events, and `transformers>=4.57,<6` compatibility unchanged.
+
 ## 0.2.8 — 2026-09-03
 
 - Aligns the node package version with the desktop release that bundles Whisper Small and improves first-run batch/voice-library interactions.
