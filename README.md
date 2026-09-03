@@ -106,6 +106,13 @@ Request 和 Settings 会在模型恢复到 GPU 之前验证。空台词、空逐
 声音克隆与声音导演必须提供参考音频的准确逐字稿。模型仅限其许可证允许的研究、教育与非商业用途，详见 `MODEL_LICENSE`。
 参考音频最长 60 秒，节点会在上传到 GPU 和 Codec 编码前检查原始波形时长。
 
+## T8star-Aix 社媒与资源
+
+- [B站](https://space.bilibili.com/385085361)
+- [YouTube](https://www.youtube.com/@T8star-Aix/)
+- [GitHub](https://github.com/T8mars)
+- [Hugging Face](https://huggingface.co/t8star)
+
 ## 来源与声明
 
 本节点不是 BreezeBlue 官方产品。模型与核心项目来自 `breezeblue-ai/breeze-tts`；兼容推理路径部分改编自 `Saganaki22/ComfyUI-Breeze-TTS-2`。完整归属见 `THIRD_PARTY_NOTICES.md`。
