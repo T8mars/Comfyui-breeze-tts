@@ -38,7 +38,7 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_ModelLoader",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.7"
+        "ver": "0.2.8"
       },
       "widgets_values": [
         "auto",
@@ -124,7 +124,7 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_DirectionRequest",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.7"
+        "ver": "0.2.8"
       },
       "widgets_values": [
         "[清嗓子] 我们需要认真讨论一下昨晚发生的事情。",
@@ -164,7 +164,7 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_GenerationSettings",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.7"
+        "ver": "0.2.8"
       },
       "widgets_values": [
         1500,
@@ -232,7 +232,7 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_Generate",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.7"
+        "ver": "0.2.8"
       },
       "widgets_values": [],
       "title": "5 生成音频",
@@ -409,7 +409,7 @@
     },
     "frontendVersion": "1.24.4",
     "t8_example_kind": "ui_workflow",
-    "t8_node_version": "0.2.7"
+    "t8_node_version": "0.2.8"
   },
   "version": 0.4
 }

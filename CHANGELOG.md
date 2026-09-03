@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.8 — 2026-09-03
+
+- Aligns the node package version with the desktop release that bundles Whisper Small and improves first-run batch/voice-library interactions.
+- Node contracts and the `transformers>=4.57,<6` compatibility policy remain unchanged.
+
 ## 0.2.7 — 2026-09-03
 
 - Aligns the node package with Voice Studio 0.2.7 and its complete reference-audio Voice Library 2.1 workflow.
