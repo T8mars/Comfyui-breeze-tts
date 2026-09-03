@@ -549,7 +549,7 @@ class Qwen3TTSTokenizerV2DecoderTransformerModel(Qwen3TTSTokenizerV2DecoderPreTr
 
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
-        
+
         inputs_embeds = self.input_proj(inputs_embeds)
 
         if use_cache and past_key_values is None:
@@ -861,7 +861,7 @@ class Qwen3TTSTokenizerV2Decoder(Qwen3TTSTokenizerV2DecoderPreTrainedModel):
         super().__init__(config)
         self.total_upsample = np.prod(config.upsample_rates + config.upsampling_ratios)
         self.pre_transformer = Qwen3TTSTokenizerV2DecoderTransformerModel._from_config(config)
-        
+
         self.quantizer = SplitResidualVectorQuantizer(
             dimension=config.codebook_dim // 2,
             n_q=config.num_quantizers,
@@ -977,22 +977,22 @@ class Qwen3TTSTokenizerV2Model(Qwen3TTSTokenizerV2PreTrainedModel):
         self.decoder = Qwen3TTSTokenizerV2Decoder._from_config(self.config.decoder_config)
 
         self.post_init()
-    
+
     def get_model_type(self):
         return self.config.model_type
-    
+
     def get_input_sample_rate(self):
         return self.input_sample_rate
-    
+
     def get_output_sample_rate(self):
         return self.output_sample_rate
-    
+
     def get_encode_downsample_rate(self):
         return self.encode_downsample_rate
-    
+
     def get_decode_upsample_rate(self):
         return self.decode_upsample_rate
-    
+
     def encode(
         self,
         input_values: torch.Tensor,

@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import math
 import random
 import secrets
 import time
@@ -18,7 +19,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from . import loader, native, runtime
+from . import compat, loader, native, runtime, voice_bundle
 
 CATEGORY = "T8star-Aix/Audio/Breeze TTS"
 MODEL_TYPE = "BREEZE_T8_MODEL"
@@ -36,6 +37,93 @@ except Exception:
 
 def _text(default: str, tooltip: str) -> tuple:
     return ("STRING", {"default": default, "multiline": True, "tooltip": tooltip})
+
+
+def _required_text(value: Any, field_name: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError(f"{field_name} 不能为空。")
+    return text
+
+
+def _finite_float(value: Any, field_name: str, minimum: float, maximum: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} 必须是数字。") from exc
+    if not math.isfinite(number) or not minimum <= number <= maximum:
+        raise ValueError(f"{field_name} 必须在 {minimum:g} 到 {maximum:g} 之间。")
+    return number
+
+
+def _bounded_int(value: Any, field_name: str, minimum: int, maximum: int) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{field_name} 必须是整数。")
+    try:
+        number = int(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{field_name} 必须是整数。") from exc
+    if number != value or not minimum <= number <= maximum:
+        raise ValueError(f"{field_name} 必须在 {minimum} 到 {maximum} 之间。")
+    return number
+
+
+def _validate_audio_contract(audio: Any, field_name: str = "reference_audio") -> None:
+    if not isinstance(audio, dict):
+        raise ValueError(f"{field_name} 必须是 ComfyUI AUDIO。")
+    waveform = audio.get("waveform")
+    if not isinstance(waveform, torch.Tensor) or waveform.ndim != 3 or waveform.numel() <= 0:
+        raise ValueError(f"{field_name}.waveform 必须是非空的 [batch, channels, samples] Tensor。")
+    if not bool(torch.isfinite(waveform).all().item()):
+        raise ValueError(f"{field_name}.waveform 不能包含 NaN 或 Inf。")
+    try:
+        sample_rate = int(audio.get("sample_rate", 0))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name}.sample_rate 必须是正整数。") from exc
+    if sample_rate <= 0:
+        raise ValueError(f"{field_name}.sample_rate 必须是正整数。")
+
+
+def _validate_request_contract(request: Any) -> None:
+    if not isinstance(request, dict):
+        raise ValueError("request 必须来自 T8 Breeze 请求节点。")
+    mode = str(request.get("mode") or "").strip().lower()
+    if mode not in {"design", "clone", "direction"}:
+        raise ValueError("request.mode 必须是 design、clone 或 direction。")
+    _required_text(request.get("text"), "text")
+    _required_text(request.get("instruction"), "instruction")
+    _finite_float(request.get("cfg_scale", 1.0), "cfg_scale", 0.1, 10.0)
+    if mode in {"clone", "direction"}:
+        _validate_audio_contract(request.get("reference_audio"))
+        _required_text(request.get("reference_text"), "reference_text")
+
+
+def _validate_settings_contract(settings: Any) -> None:
+    if not isinstance(settings, dict):
+        raise ValueError("settings 必须来自 T8 生成设置节点。")
+    required = {
+        "max_new_tokens",
+        "temperature",
+        "top_k",
+        "top_p",
+        "repetition_penalty",
+        "depth_temperature",
+        "depth_top_k",
+        "depth_top_p",
+        "seed",
+    }
+    missing = sorted(required.difference(settings))
+    if missing:
+        raise ValueError("settings 缺少字段: " + ", ".join(missing))
+    _bounded_int(settings["max_new_tokens"], "max_new_tokens", 64, 3000)
+    _bounded_int(settings["top_k"], "top_k", 0, 1024)
+    _bounded_int(settings["depth_top_k"], "depth_top_k", 0, 1024)
+    _bounded_int(settings["seed"], "seed", 0, 2**31 - 1)
+    _finite_float(settings["temperature"], "temperature", 0.01, 2.0)
+    _finite_float(settings["depth_temperature"], "depth_temperature", 0.01, 2.0)
+    _finite_float(settings["repetition_penalty"], "repetition_penalty", 0.01, 2.0)
+    _finite_float(settings["top_p"], "top_p", 0.01, 1.0)
+    _finite_float(settings["depth_top_p"], "depth_top_p", 0.01, 1.0)
 
 
 class BreezeT8ModelLoader:
@@ -103,6 +191,7 @@ class BreezeT8ModelLoader:
             "device": str(bundle.device),
             "dtype": bundle.dtype_name,
             "attention": bundle.attention,
+            "compatibility": compat.check_transformers(raise_on_error=False).to_dict(),
         }
         return bundle, json.dumps(info, ensure_ascii=False, indent=2)
 
@@ -128,7 +217,12 @@ class BreezeT8DesignRequest:
     DESCRIPTION = "创建零样本声音设计请求。"
 
     def build(self, text, voice_description, cfg_scale):
-        return ({"mode": "design", "text": text, "instruction": voice_description, "cfg_scale": cfg_scale},)
+        return ({
+            "mode": "design",
+            "text": _required_text(text, "text"),
+            "instruction": _required_text(voice_description, "voice_description"),
+            "cfg_scale": _finite_float(cfg_scale, "cfg_scale", 0.1, 10.0),
+        },)
 
 
 class BreezeT8CloneRequest:
@@ -153,13 +247,14 @@ class BreezeT8CloneRequest:
     DESCRIPTION = "从参考音频与准确逐字稿创建声音克隆请求。"
 
     def build(self, text, reference_audio, reference_text, instruction=runtime.DEFAULT_INSTRUCTION, cfg_scale=1.0):
+        _validate_audio_contract(reference_audio)
         return ({
             "mode": "clone",
-            "text": text,
+            "text": _required_text(text, "text"),
             "reference_audio": reference_audio,
-            "reference_text": reference_text,
-            "instruction": instruction,
-            "cfg_scale": cfg_scale,
+            "reference_text": _required_text(reference_text, "reference_text"),
+            "instruction": _required_text(instruction, "instruction"),
+            "cfg_scale": _finite_float(cfg_scale, "cfg_scale", 0.1, 10.0),
         },)
 
 
@@ -183,14 +278,173 @@ class BreezeT8DirectionRequest:
     DESCRIPTION = "保留参考说话人身份，同时控制情绪、语速与表达。"
 
     def build(self, text, reference_audio, reference_text, direction, cfg_scale):
+        _validate_audio_contract(reference_audio)
         return ({
             "mode": "direction",
-            "text": text,
+            "text": _required_text(text, "text"),
             "reference_audio": reference_audio,
-            "reference_text": reference_text,
-            "instruction": direction,
-            "cfg_scale": cfg_scale,
+            "reference_text": _required_text(reference_text, "reference_text"),
+            "instruction": _required_text(direction, "direction"),
+            "cfg_scale": _finite_float(cfg_scale, "cfg_scale", 0.1, 10.0),
         },)
+
+
+class BreezeT8VoiceBundleRequest:
+    """Bridge a desktop voice-library bundle into a standard Breeze request."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "bundle_path": (
+                    "STRING",
+                    {
+                        "default": "voice.t8voice.zip",
+                        "tooltip": "桌面版音色库导出的本地 .t8voice.zip；节点只离线读取，不会联网或解压到磁盘。",
+                    },
+                ),
+                "text": _text("欢迎使用桌面版与 ComfyUI 共用的音色。", "本次要合成的台词。"),
+                "line_direction_mode": (
+                    ["inherit", "override", "neutral"],
+                    {
+                        "default": "inherit",
+                        "tooltip": "inherit 继承音色；override 使用本句指令；neutral 使用自然、清晰的中性表达。",
+                    },
+                ),
+            },
+            "optional": {
+                "line_direction": _text("", "逐句自然语言情感/语速/表达指令；override 时必填。"),
+                "cfg_scale": (
+                    "FLOAT",
+                    {
+                        "default": 0.0,
+                        "min": 0.0,
+                        "max": 10.0,
+                        "step": 0.1,
+                        "tooltip": "0 表示沿用音色包默认值；其他值覆盖本句 CFG。",
+                    },
+                ),
+            },
+        }
+
+    RETURN_TYPES = (REQUEST_TYPE, "AUDIO", "STRING")
+    RETURN_NAMES = ("request", "reference_audio", "voice_info")
+    FUNCTION = "build"
+    CATEGORY = CATEGORY
+    DESCRIPTION = "安全读取桌面版 .t8voice.zip，并生成可直接连接 T8 生成节点的请求。"
+
+    @classmethod
+    def IS_CHANGED(cls, bundle_path, **_kwargs):
+        try:
+            return voice_bundle.bundle_fingerprint(bundle_path)
+        except ValueError as exc:
+            return f"invalid:{exc}"
+
+    def build(self, bundle_path, text, line_direction_mode, line_direction="", cfg_scale=0.0):
+        text = str(text or "").strip()
+        if not text:
+            raise ValueError("text 不能为空。")
+        profile, payload, member = voice_bundle.load_voice_bundle(bundle_path)
+        reference_audio = voice_bundle.decode_reference_audio(payload, member)
+
+        direction_mode = str(line_direction_mode or "inherit").strip().lower()
+        if direction_mode not in {"inherit", "override", "neutral"}:
+            raise ValueError("line_direction_mode 必须是 inherit、override 或 neutral。")
+        profile_mode = profile["mode"]
+        has_reference = payload is not None
+        instruction = str(profile.get("instruction") or runtime.DEFAULT_INSTRUCTION).strip()
+        request_mode = profile_mode
+        if direction_mode == "override":
+            instruction = str(line_direction or "").strip()
+            if not instruction:
+                raise ValueError("line_direction_mode=override 时 line_direction 不能为空。")
+            # A clone with per-line direction becomes a Direction request while
+            # retaining the same verified speaker reference.
+            request_mode = "direction" if has_reference else "design"
+        elif direction_mode == "neutral":
+            instruction = runtime.DEFAULT_INSTRUCTION
+            request_mode = "clone" if has_reference else "design"
+
+        selected_cfg = float(cfg_scale)
+        if selected_cfg == 0.0:
+            selected_cfg = float(profile["cfg_scale"])
+        if not 0.1 <= selected_cfg <= 10.0:
+            raise ValueError("cfg_scale 必须为 0（继承）或 0.1 到 10.0。")
+        request = {
+            "mode": request_mode,
+            "text": text,
+            "instruction": instruction,
+            "cfg_scale": selected_cfg,
+            "language": profile["language"],
+            "voice_id": profile["id"],
+            "voice_name": profile["name"],
+            "line_direction_mode": direction_mode,
+        }
+        if has_reference:
+            request["reference_audio"] = reference_audio
+            request["reference_text"] = profile["reference_text"]
+        public_info = {
+            key: value
+            for key, value in profile.items()
+            if key not in {"bundle_path"}
+        }
+        public_info.update({"effective_mode": request_mode, "line_direction_mode": direction_mode})
+        return request, reference_audio, json.dumps(public_info, ensure_ascii=False, indent=2)
+
+
+class BreezeT8LineDirection:
+    """Apply a non-destructive per-line direction override to any request."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "request": (REQUEST_TYPE,),
+                "direction_mode": (["inherit", "override", "neutral"], {"default": "inherit"}),
+                "direction": _text("语气温和而坚定，停顿自然。", "override 模式使用的本句指令。"),
+                "cfg_scale": (
+                    "FLOAT",
+                    {
+                        "default": 0.0,
+                        "min": 0.0,
+                        "max": 10.0,
+                        "step": 0.1,
+                        "tooltip": "0 保留上游设置；其他值仅覆盖本句 CFG。",
+                    },
+                ),
+            }
+        }
+
+    RETURN_TYPES = (REQUEST_TYPE,)
+    RETURN_NAMES = ("request",)
+    FUNCTION = "apply"
+    CATEGORY = CATEGORY
+    DESCRIPTION = "为单句设置继承、覆盖或中性表达；不会修改上游 request。"
+
+    def apply(self, request, direction_mode, direction, cfg_scale):
+        if not isinstance(request, dict):
+            raise ValueError("request 必须来自 T8 Breeze 请求节点。")
+        result = dict(request)
+        mode = str(direction_mode or "inherit").strip().lower()
+        if mode not in {"inherit", "override", "neutral"}:
+            raise ValueError("direction_mode 必须是 inherit、override 或 neutral。")
+        has_reference = result.get("reference_audio") is not None
+        if mode == "override":
+            instruction = str(direction or "").strip()
+            if not instruction:
+                raise ValueError("direction_mode=override 时 direction 不能为空。")
+            result["instruction"] = instruction
+            result["mode"] = "direction" if has_reference else "design"
+        elif mode == "neutral":
+            result["instruction"] = runtime.DEFAULT_INSTRUCTION
+            result["mode"] = "clone" if has_reference else "design"
+        selected_cfg = float(cfg_scale)
+        if selected_cfg != 0.0:
+            if not 0.1 <= selected_cfg <= 10.0:
+                raise ValueError("cfg_scale 必须为 0（保留）或 0.1 到 10.0。")
+            result["cfg_scale"] = selected_cfg
+        result["line_direction_mode"] = mode
+        return (result,)
 
 
 class BreezeT8GenerationSettings:
@@ -199,13 +453,13 @@ class BreezeT8GenerationSettings:
         return {
             "required": {
                 "max_new_tokens": ("INT", {"default": 1500, "min": 64, "max": 3000, "step": 8}),
-                "temperature": ("FLOAT", {"default": 0.9, "min": 0.0, "max": 2.0, "step": 0.05}),
+                "temperature": ("FLOAT", {"default": 0.9, "min": 0.01, "max": 2.0, "step": 0.05}),
                 "top_k": ("INT", {"default": 50, "min": 0, "max": 1024}),
-                "top_p": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "repetition_penalty": ("FLOAT", {"default": 1.1, "min": 0.0, "max": 2.0, "step": 0.05}),
-                "depth_temperature": ("FLOAT", {"default": 0.9, "min": 0.0, "max": 2.0, "step": 0.05}),
+                "top_p": ("FLOAT", {"default": 1.0, "min": 0.01, "max": 1.0, "step": 0.01}),
+                "repetition_penalty": ("FLOAT", {"default": 1.1, "min": 0.01, "max": 2.0, "step": 0.05}),
+                "depth_temperature": ("FLOAT", {"default": 0.9, "min": 0.01, "max": 2.0, "step": 0.05}),
                 "depth_top_k": ("INT", {"default": 50, "min": 0, "max": 1024}),
-                "depth_top_p": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "depth_top_p": ("FLOAT", {"default": 1.0, "min": 0.01, "max": 1.0, "step": 0.01}),
                 "seed": ("INT", {"default": 42, "min": 0, "max": 2**31 - 1}),
             }
         }
@@ -217,7 +471,9 @@ class BreezeT8GenerationSettings:
     DESCRIPTION = "集中管理可复现的采样参数。"
 
     def build(self, **kwargs):
-        return (dict(kwargs),)
+        settings = dict(kwargs)
+        _validate_settings_contract(settings)
+        return (settings,)
 
 
 @contextlib.contextmanager
@@ -247,6 +503,8 @@ def _reference_cache_key(bundle, wav: torch.Tensor, sample_rate: int) -> str:
 
 def _generate_audio(bundle, request: dict[str, Any], settings: dict[str, Any]) -> tuple[dict, dict]:
     started = time.perf_counter()
+    _validate_request_contract(request)
+    _validate_settings_contract(settings)
     text = str(request.get("text", "")).strip()
     if not text:
         raise ValueError("text 不能为空。")
@@ -391,6 +649,8 @@ NODE_CLASS_MAPPINGS = {
     "T8_BreezeTTS_DesignRequest": BreezeT8DesignRequest,
     "T8_BreezeTTS_CloneRequest": BreezeT8CloneRequest,
     "T8_BreezeTTS_DirectionRequest": BreezeT8DirectionRequest,
+    "T8_BreezeTTS_VoiceBundleRequest": BreezeT8VoiceBundleRequest,
+    "T8_BreezeTTS_LineDirection": BreezeT8LineDirection,
     "T8_BreezeTTS_GenerationSettings": BreezeT8GenerationSettings,
     "T8_BreezeTTS_Generate": BreezeT8Generate,
 }
@@ -400,6 +660,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "T8_BreezeTTS_DesignRequest": "Breeze TTS 2 · T8 声音设计",
     "T8_BreezeTTS_CloneRequest": "Breeze TTS 2 · T8 声音克隆",
     "T8_BreezeTTS_DirectionRequest": "Breeze TTS 2 · T8 声音导演",
+    "T8_BreezeTTS_VoiceBundleRequest": "Breeze TTS 2 · T8 桌面音色包",
+    "T8_BreezeTTS_LineDirection": "Breeze TTS 2 · T8 逐句情感",
     "T8_BreezeTTS_GenerationSettings": "Breeze TTS 2 · T8 生成设置",
     "T8_BreezeTTS_Generate": "Breeze TTS 2 · T8 生成音频",
 }

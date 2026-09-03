@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from importlib import metadata
 from importlib.util import find_spec
 
@@ -12,6 +12,14 @@ from packaging.version import InvalidVersion, Version
 MIN_TRANSFORMERS = Version("4.57.0")
 MAX_TRANSFORMERS = Version("6.0.0")
 TESTED_TRANSFORMERS = ("4.57.3", "5.16.1")
+PROTECTED_HOST_PACKAGES = (
+    "torch",
+    "torchaudio",
+    "torchvision",
+    "transformers",
+    "tokenizers",
+    "numpy",
+)
 
 
 @dataclass(frozen=True)
@@ -20,17 +28,33 @@ class CompatibilityReport:
     supported: bool
     message: str
     tested: tuple[str, ...] = TESTED_TRANSFORMERS
+    host_versions: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return asdict(self)
 
 
+def protected_host_versions() -> dict[str, str]:
+    """Inspect host-owned packages without importing, installing or modifying them."""
+
+    result: dict[str, str] = {}
+    for package in PROTECTED_HOST_PACKAGES:
+        try:
+            result[package] = metadata.version(package)
+        except metadata.PackageNotFoundError:
+            result[package] = "missing"
+        except Exception as exc:
+            result[package] = f"unknown ({type(exc).__name__})"
+    return result
+
+
 def check_transformers(*, raise_on_error: bool = True) -> CompatibilityReport:
+    host_versions = protected_host_versions()
     if find_spec("numpy") is None:
         message = (
             "ComfyUI 宿主缺少 NumPy；请修复宿主环境。T8 节点不会自行安装或覆盖 NumPy。"
         )
-        report = CompatibilityReport("unknown", False, message)
+        report = CompatibilityReport("unknown", False, message, host_versions=host_versions)
         if raise_on_error:
             raise RuntimeError(message)
         return report
@@ -38,12 +62,22 @@ def check_transformers(*, raise_on_error: bool = True) -> CompatibilityReport:
         raw = metadata.version("transformers")
         version = Version(raw)
     except metadata.PackageNotFoundError as exc:
-        report = CompatibilityReport("missing", False, "未安装 transformers；请使用 ComfyUI 自带环境安装。")
+        report = CompatibilityReport(
+            "missing",
+            False,
+            "未安装 transformers；请使用 ComfyUI 自带环境安装。",
+            host_versions=host_versions,
+        )
         if raise_on_error:
             raise RuntimeError(report.message) from exc
         return report
     except InvalidVersion as exc:
-        report = CompatibilityReport(str(exc), False, "无法识别 transformers 版本。")
+        report = CompatibilityReport(
+            str(exc),
+            False,
+            "无法识别 transformers 版本。",
+            host_versions=host_versions,
+        )
         if raise_on_error:
             raise RuntimeError(report.message) from exc
         return report
@@ -54,7 +88,7 @@ def check_transformers(*, raise_on_error: bool = True) -> CompatibilityReport:
         if supported
         else f"Transformers {raw} 不受支持；需要 >=4.57,<6。请勿单独覆盖 ComfyUI 的 Torch。"
     )
-    report = CompatibilityReport(raw, supported, message)
+    report = CompatibilityReport(raw, supported, message, host_versions=host_versions)
     if raise_on_error and not supported:
         raise RuntimeError(message)
     return report

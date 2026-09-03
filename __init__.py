@@ -6,7 +6,7 @@ import logging
 
 from .compat import check_transformers
 
-__version__ = "0.1.2"
+__version__ = "0.2.5"
 logger = logging.getLogger("BreezeTTS2T8")
 
 report = check_transformers(raise_on_error=True)

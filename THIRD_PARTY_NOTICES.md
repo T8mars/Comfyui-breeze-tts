@@ -29,4 +29,3 @@ The adapted files are `native.py`, `runtime.py`, `loader.py`, `int8.py`, and fil
 ## Qwen3-TTS codec implementation
 
 Files under `vendor/codec_*` contain code adapted from `Qwen/Qwen3-TTS` / `qwen-tts 0.1.1`, licensed under Apache License 2.0. File headers retain provenance and describe compatibility changes.
-

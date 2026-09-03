@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.2.5 — 2026-09-03
+
+- Adds four real ComfyUI frontend workflows with top-level `nodes`, `links`, canvas positions, groups, widgets, preview, and save nodes.
+- Keeps the existing `*_api.json` prompt examples, while clearly separating them from drag-and-drop `*_workflow.json` files.
+- Adds automated graph/link validation so API-only examples cannot be mistaken for UI workflows again.
+- Labels the license, reference-audio, transcript, and `.t8voice.zip` steps directly on the canvas.
+- Serializes the current ComfyUI AUDIO outputs on both PreviewAudio and SaveAudio, and documents the expected missing-reference prompt.
+
+## 0.2.4 — 2026-09-03
+
+- Aligns the node bundle with Voice Studio 0.2.4 and its reliable per-line rerun, backfill, and automatic timeline remix workflow.
+- Keeps all eight node contracts and the host-owned dependency policy unchanged; compatibility remains `transformers>=4.57,<6`.
+
+## 0.2.3 — 2026-09-01
+
+- Aligns the node bundle with Voice Studio 0.2.3 and its quick-start, performance-recipe, responsive navigation, and global task-feedback release.
+- Keeps all eight node contracts and the host-owned Torch/Transformers policy unchanged; compatibility remains `transformers>=4.57,<6`.
+
+## 0.2.2 — 2026-09-01
+
+- Documents a `--no-deps` manual-install path and the exact `comfyui-breeze-tts-T8` folder name so protected ComfyUI packages stay host-owned.
+- Validates Request, AUDIO and sampling-setting contracts before resuming the model on GPU; zero temperatures and repetition penalties are no longer accepted.
+- Adds regression coverage for Transformers 4.57.x/5.x boundaries and both dependency manifests' protected-package exclusions.
+
+## 0.2.1 — 2026-09-01
+
+- Aligns the distributable node release with Voice Studio 0.2.1 and its hardened project, queue, and voice-bundle workflows.
+- Retains eight composable nodes and the host-owned dependency policy for Transformers 4.57.x through 5.x.
+
+## 0.2.0 — 2026-09-01
+
+- Adds an offline `T8 desktop voice bundle` node for verified `.t8voice.zip` files exported by the desktop voice library.
+- Converts embedded references directly to standard ComfyUI `AUDIO` without extracting archive data to disk.
+- Validates archive paths, Windows case-fold collisions, member counts, sizes, compression ratios and SHA-256 hashes before decode.
+- Adds a composable per-line `inherit` / `override` / `neutral` natural-language direction helper; clone overrides retain the reference and route through Direction mode.
+- Keeps the host-owned Torch, Transformers, Tokenizers and NumPy policy; compatibility remains `transformers>=4.57,<6`, including tested 4.57.x and 5.x lines.
+
 ## 0.1.2 — 2026-09-01
 
 - Validates all required model, tokenizer, codec, index, and indexed shard files before loading, with resumable-download repair guidance.
