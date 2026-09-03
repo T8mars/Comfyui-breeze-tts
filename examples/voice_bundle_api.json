@@ -7,7 +7,7 @@
     "class_type": "T8_BreezeTTS_VoiceBundleRequest",
     "inputs": {
       "bundle_path": "D:/voices/my-role.t8voice.zip",
-      "text": "这句台词使用桌面版导出的音色。",
+      "text": "[咳嗽] 这句台词使用桌面版导出的音色。",
       "line_direction_mode": "override",
       "line_direction": "情绪温暖，语速自然，在句末轻微停顿。",
       "cfg_scale": 0.0

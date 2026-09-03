@@ -38,7 +38,7 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_ModelLoader",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.5"
+        "ver": "0.2.6"
       },
       "widgets_values": [
         "auto",
@@ -124,15 +124,15 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_DirectionRequest",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.5"
+        "ver": "0.2.6"
       },
       "widgets_values": [
-        "我们需要认真讨论一下昨晚发生的事情。",
+        "[清嗓子] 我们需要认真讨论一下昨晚发生的事情。",
         "请替换为参考音频的准确逐字稿。",
         "语速放慢，语气克制而严肃。",
         4.0
       ],
-      "title": "③ 声音导演 · 填准确逐字稿",
+      "title": "③ 声音导演 · text 支持行内声音事件",
       "color": "#6f3d65",
       "bgcolor": "#342033"
     },
@@ -164,7 +164,7 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_GenerationSettings",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.5"
+        "ver": "0.2.6"
       },
       "widgets_values": [
         1500,
@@ -232,7 +232,7 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_Generate",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.5"
+        "ver": "0.2.6"
       },
       "widgets_values": [],
       "title": "5 生成音频",
@@ -383,6 +383,19 @@
       "color": "#ff6f9f",
       "font_size": 22,
       "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "行内声音事件｜中文：[笑] [咳嗽] [清嗓子] [叹气]｜English: (laugh) (cough) (clears throat) (sigh)",
+      "bounding": [
+        390,
+        590,
+        790,
+        115
+      ],
+      "color": "#ff8fbd",
+      "font_size": 18,
+      "flags": {}
     }
   ],
   "config": {},
@@ -396,7 +409,7 @@
     },
     "frontendVersion": "1.24.4",
     "t8_example_kind": "ui_workflow",
-    "t8_node_version": "0.2.5"
+    "t8_node_version": "0.2.6"
   },
   "version": 0.4
 }

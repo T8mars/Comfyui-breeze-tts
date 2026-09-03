@@ -38,6 +38,10 @@ class UIWorkflowTests(unittest.TestCase):
             "PreviewAudio",
             "SaveAudio",
         }
+        canonical_events = (
+            "[笑]", "[咳嗽]", "[清嗓子]", "[叹气]",
+            "(laugh)", "(cough)", "(clears throat)", "(sigh)",
+        )
 
         for path in paths:
             workflow = json.loads(path.read_text(encoding="utf-8"))
@@ -47,6 +51,8 @@ class UIWorkflowTests(unittest.TestCase):
             self.assertEqual(len(nodes), len(workflow["nodes"]))
             self.assertTrue(required_types <= {node["type"] for node in nodes.values()})
             self.assertTrue({node["type"] for node in nodes.values()} <= allowed_types)
+            group_titles = " ".join(group["title"] for group in workflow["groups"])
+            self.assertTrue(all(event in group_titles for event in canonical_events))
 
             for core_type in ("PreviewAudio", "SaveAudio"):
                 core_node = next(node for node in nodes.values() if node["type"] == core_type)

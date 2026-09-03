@@ -1,6 +1,6 @@
 # comfyui-breeze-tts-T8
 
-非官方 Breeze TTS 2 ComfyUI 配套节点。v0.2.5 提供 8 个可组合节点，并补齐可直接拖入 ComfyUI 画布的前端工作流：模型加载、声音设计、声音克隆、声音导演、桌面音色包、逐句情感、生成设置和音频生成。
+非官方 Breeze TTS 2 ComfyUI 配套节点。v0.2.6 提供 8 个可组合节点、四份可直接拖入画布的前端工作流，并在每份工作流中展示行内声音事件语法。
 
 ## 安装
 
@@ -80,6 +80,15 @@ Request 和 Settings 会在模型恢复到 GPU 之前验证。空台词、空逐
 
 如果导入后节点显示红色“缺失”，请确认节点目录是 `ComfyUI/custom_nodes/comfyui-breeze-tts-T8`，重启 ComfyUI 后再导入 `*_workflow.json`，不要导入同名的 `*_api.json`。
 
+## 行内声音事件
+
+声音事件直接写入任意 Design、Clone、Direction 或 Voice Bundle 节点的 `text` 台词框，不需要额外节点。四份 UI 工作流底部均有粉色语法提示区，各请求节点的悬浮说明也会显示相同提示。
+
+- 英文：`(laugh)`、`(cough)`、`(clears throat)`、`(sigh)`
+- 中文：`[笑]`、`[咳嗽]`、`[清嗓子]`、`[叹气]`
+
+例如：`[清嗓子] 接下来宣布今天的安排。` 或 `(sigh) I thought we had more time.`。这些标记会原样交给 Breeze TTS 2；它们是生成提示，实际强度仍会受台词、指令、采样参数和 Seed 影响。
+
 ## 桌面音色包与逐句情感
 
 桌面版音色库可导出 `*.t8voice.zip`。在 `T8 桌面音色包` 节点中填写该文件的本地绝对路径和本句文本，输出的 `request` 可直接连接 `T8 生成音频`，`reference_audio` 是标准 ComfyUI `AUDIO`，可用于预览或其他音频节点。
@@ -106,4 +115,4 @@ Request 和 Settings 会在模型恢复到 GPU 之前验证。空台词、空逐
 - GitHub：<https://github.com/T8mars/Comfyui-breeze-tts>
 - Comfy Registry Publisher：`t8star`
 - Registry 节点 ID：`comfyui-breeze-tts-T8`
-- 当前版本：`0.2.5`
+- 当前版本：`0.2.6`

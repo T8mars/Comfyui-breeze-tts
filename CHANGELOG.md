@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.6 — 2026-09-03
+
+- Shows the canonical Chinese and English inline vocal-event syntax directly on every frontend workflow canvas.
+- Adds vocal-event examples and tooltips to Design, Clone, Direction, and Voice Bundle text inputs.
+- Adds regression coverage proving event markers are preserved rather than stripped or rewritten.
+- Keeps the standalone desktop bundle and the install-only ComfyUI node package clearly separated.
+
 ## 0.2.5 — 2026-09-03
 
 - Adds four real ComfyUI frontend workflows with top-level `nodes`, `links`, canvas positions, groups, widgets, preview, and save nodes.

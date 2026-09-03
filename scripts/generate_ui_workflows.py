@@ -13,8 +13,12 @@ from typing import Any
 from uuid import UUID
 
 
-PACKAGE_VERSION = "0.2.5"
+PACKAGE_VERSION = "0.2.6"
 EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "examples"
+INLINE_EVENT_GUIDE = (
+    "行内声音事件｜中文：[笑] [咳嗽] [清嗓子] [叹气]｜"
+    "English: (laugh) (cough) (clears throat) (sigh)"
+)
 WORKFLOW_IDS = {
     "voice_design_workflow.json": "533675ed-0775-4ccd-a730-49b085a2b910",
     "voice_clone_workflow.json": "2ae14050-5972-43bc-b42c-cae09ca29831",
@@ -195,7 +199,15 @@ def _workflow(filename: str, nodes: list[dict[str, Any]], links: list[list[Any]]
                 "color": "#ff6f9f",
                 "font_size": 22,
                 "flags": {},
-            }
+            },
+            {
+                "id": 2,
+                "title": INLINE_EVENT_GUIDE,
+                "bounding": [390, 590, 790, 115],
+                "color": "#ff8fbd",
+                "font_size": 18,
+                "flags": {},
+            },
         ],
         "config": {},
         "extra": {
@@ -223,7 +235,7 @@ def voice_design() -> dict[str, Any]:
                 "一位温柔自信的年轻女性，声音清晰，语气亲切。",
                 4.0,
             ],
-            title="② 声音设计",
+            title="② 声音设计 · text 支持 [笑]/(laugh)",
             color="#6f3d65",
             bgcolor="#342033",
         ),
@@ -248,14 +260,14 @@ def _reference_workflow(*, direction: bool) -> dict[str, Any]:
     widgets: list[Any]
     if direction:
         widgets = [
-            "我们需要认真讨论一下昨晚发生的事情。",
+            "[清嗓子] 我们需要认真讨论一下昨晚发生的事情。",
             "请替换为参考音频的准确逐字稿。",
             "语速放慢，语气克制而严肃。",
             4.0,
         ]
     else:
         widgets = [
-            "很高兴再次听到你的声音。",
+            "[叹气] 很高兴再次听到你的声音。",
             "请替换为参考音频的准确逐字稿。",
             "Speak clearly and naturally.",
             1.0,
@@ -284,7 +296,7 @@ def _reference_workflow(*, direction: bool) -> dict[str, Any]:
             inputs=[_input("reference_audio", "AUDIO", 2)],
             outputs=[_output("request", "BREEZE_T8_REQUEST", [3], 0)],
             widgets=widgets,
-            title=f"③ {label} · 填准确逐字稿",
+            title=f"③ {label} · text 支持行内声音事件",
             color="#6f3d65",
             bgcolor="#342033",
         ),
@@ -326,12 +338,12 @@ def voice_bundle() -> dict[str, Any]:
             ],
             widgets=[
                 "D:/voices/my-role.t8voice.zip",
-                "这句台词使用桌面版导出的音色。",
+                "[咳嗽] 这句台词使用桌面版导出的音色。",
                 "override",
                 "情绪温暖，语速自然，在句末轻微停顿。",
                 0.0,
             ],
-            title="② 桌面音色包 · 改成实际文件路径",
+            title="② 桌面音色包 · text 支持行内声音事件",
             color="#6f3d65",
             bgcolor="#342033",
         ),

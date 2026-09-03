@@ -38,7 +38,7 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_ModelLoader",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.5"
+        "ver": "0.2.6"
       },
       "widgets_values": [
         "auto",
@@ -91,16 +91,16 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_VoiceBundleRequest",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.5"
+        "ver": "0.2.6"
       },
       "widgets_values": [
         "D:/voices/my-role.t8voice.zip",
-        "这句台词使用桌面版导出的音色。",
+        "[咳嗽] 这句台词使用桌面版导出的音色。",
         "override",
         "情绪温暖，语速自然，在句末轻微停顿。",
         0.0
       ],
-      "title": "② 桌面音色包 · 改成实际文件路径",
+      "title": "② 桌面音色包 · text 支持行内声音事件",
       "color": "#6f3d65",
       "bgcolor": "#342033"
     },
@@ -132,7 +132,7 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_GenerationSettings",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.5"
+        "ver": "0.2.6"
       },
       "widgets_values": [
         1500,
@@ -200,7 +200,7 @@
       "properties": {
         "Node name for S&R": "T8_BreezeTTS_Generate",
         "cnr_id": "comfyui-breeze-tts-T8",
-        "ver": "0.2.5"
+        "ver": "0.2.6"
       },
       "widgets_values": [],
       "title": "4 生成音频",
@@ -343,6 +343,19 @@
       "color": "#ff6f9f",
       "font_size": 22,
       "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "行内声音事件｜中文：[笑] [咳嗽] [清嗓子] [叹气]｜English: (laugh) (cough) (clears throat) (sigh)",
+      "bounding": [
+        390,
+        590,
+        790,
+        115
+      ],
+      "color": "#ff8fbd",
+      "font_size": 18,
+      "flags": {}
     }
   ],
   "config": {},
@@ -356,7 +369,7 @@
     },
     "frontendVersion": "1.24.4",
     "t8_example_kind": "ui_workflow",
-    "t8_node_version": "0.2.5"
+    "t8_node_version": "0.2.6"
   },
   "version": 0.4
 }

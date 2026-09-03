@@ -28,6 +28,10 @@ SETTINGS_TYPE = "BREEZE_T8_SETTINGS"
 _GENERATION_LOCK = loader.GENERATION_LOCK
 _REFERENCE_CACHE: OrderedDict[str, torch.Tensor] = OrderedDict()
 _REFERENCE_CACHE_LIMIT = 8
+INLINE_EVENT_TOOLTIP = (
+    "支持行内声音事件：中文 [笑] [咳嗽] [清嗓子] [叹气]；"
+    "英文 (laugh) (cough) (clears throat) (sigh)。标记应直接写入台词。"
+)
 
 try:
     from comfy.utils import ProgressBar
@@ -37,6 +41,10 @@ except Exception:
 
 def _text(default: str, tooltip: str) -> tuple:
     return ("STRING", {"default": default, "multiline": True, "tooltip": tooltip})
+
+
+def _synthesis_text(default: str, label: str = "要合成的文本。") -> tuple:
+    return _text(default, f"{label}{INLINE_EVENT_TOOLTIP}")
 
 
 def _required_text(value: Any, field_name: str) -> str:
@@ -201,7 +209,7 @@ class BreezeT8DesignRequest:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "text": _text("欢迎使用 Breeze TTS 2。", "要合成的文本。"),
+                "text": _synthesis_text("[笑] 欢迎使用 Breeze TTS 2。"),
                 "voice_description": _text(
                     "一位温柔自信的年轻女性，声音清晰，语气亲切。",
                     "无参考音频的声音描述；建议与正文使用同一语言。",
@@ -214,7 +222,7 @@ class BreezeT8DesignRequest:
     RETURN_NAMES = ("request",)
     FUNCTION = "build"
     CATEGORY = CATEGORY
-    DESCRIPTION = "创建零样本声音设计请求。"
+    DESCRIPTION = "创建零样本声音设计请求；text 可直接插入中英文行内声音事件。"
 
     def build(self, text, voice_description, cfg_scale):
         return ({
@@ -230,7 +238,7 @@ class BreezeT8CloneRequest:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "text": _text("很高兴再次听到你的声音。", "要合成的文本。"),
+                "text": _synthesis_text("[叹气] 很高兴再次听到你的声音。"),
                 "reference_audio": ("AUDIO",),
                 "reference_text": _text("参考音频的准确逐字稿。", "必须与参考音频准确对应。"),
             },
@@ -244,7 +252,7 @@ class BreezeT8CloneRequest:
     RETURN_NAMES = ("request",)
     FUNCTION = "build"
     CATEGORY = CATEGORY
-    DESCRIPTION = "从参考音频与准确逐字稿创建声音克隆请求。"
+    DESCRIPTION = "从参考音频与准确逐字稿创建声音克隆请求；text 支持行内声音事件。"
 
     def build(self, text, reference_audio, reference_text, instruction=runtime.DEFAULT_INSTRUCTION, cfg_scale=1.0):
         _validate_audio_contract(reference_audio)
@@ -263,7 +271,7 @@ class BreezeT8DirectionRequest:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "text": _text("我们需要认真讨论一下昨晚发生的事情。", "要合成的文本。"),
+                "text": _synthesis_text("[清嗓子] 我们需要认真讨论一下昨晚发生的事情。"),
                 "reference_audio": ("AUDIO",),
                 "reference_text": _text("参考音频的准确逐字稿。", "必须与参考音频准确对应。"),
                 "direction": _text("语速放慢，语气克制而严肃。", "音色不变时的情绪、节奏和表达指令。"),
@@ -275,7 +283,7 @@ class BreezeT8DirectionRequest:
     RETURN_NAMES = ("request",)
     FUNCTION = "build"
     CATEGORY = CATEGORY
-    DESCRIPTION = "保留参考说话人身份，同时控制情绪、语速与表达。"
+    DESCRIPTION = "保留参考说话人身份，同时控制情绪、语速、表达和 text 中的行内声音事件。"
 
     def build(self, text, reference_audio, reference_text, direction, cfg_scale):
         _validate_audio_contract(reference_audio)
@@ -303,7 +311,10 @@ class BreezeT8VoiceBundleRequest:
                         "tooltip": "桌面版音色库导出的本地 .t8voice.zip；节点只离线读取，不会联网或解压到磁盘。",
                     },
                 ),
-                "text": _text("欢迎使用桌面版与 ComfyUI 共用的音色。", "本次要合成的台词。"),
+                "text": _synthesis_text(
+                    "[咳嗽] 欢迎使用桌面版与 ComfyUI 共用的音色。",
+                    "本次要合成的台词。",
+                ),
                 "line_direction_mode": (
                     ["inherit", "override", "neutral"],
                     {
@@ -331,7 +342,7 @@ class BreezeT8VoiceBundleRequest:
     RETURN_NAMES = ("request", "reference_audio", "voice_info")
     FUNCTION = "build"
     CATEGORY = CATEGORY
-    DESCRIPTION = "安全读取桌面版 .t8voice.zip，并生成可直接连接 T8 生成节点的请求。"
+    DESCRIPTION = "安全读取桌面版 .t8voice.zip；生成请求并保留 text 中的行内声音事件。"
 
     @classmethod
     def IS_CHANGED(cls, bundle_path, **_kwargs):
