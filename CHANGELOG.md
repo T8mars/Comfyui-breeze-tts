@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.3.4 — 2026-09-09
+
+- Synchronize the official Voice Clone/Design/Direction routing, including reference-only pure cloning and no implicit clone instruction.
+- Reset the seed at the actual sampling boundary, use the semantic backbone dtype for runtime caches, and select the smallest fitting warmed text-encoder graph bucket.
+- Add the official batch-4 Fast All warmup buckets and preserve the nested text encoder's independent attention implementation.
+- Disable the inapplicable Mistral tokenizer regex repair explicitly and pin the official model documentation/license revision `799624c0` (weights unchanged).
+- Surface native BF16 hardware compatibility in desktop diagnostics and retain the hard CUDA device guard.
+
+## 0.3.3 — 2026-09-04
+
+- Synchronize the node package with the Voice Studio categorized vocal-event preset release.
+- Voice Studio now hard-verifies its model, audio codec, and streaming runtime share one CUDA device before generation and reports the actual device; ComfyUI node behavior is unchanged.
+- Keep all eight node contracts, four workflows, canonical inline-event syntax, and host dependency policy unchanged.
+
+## 0.3.2 — 2026-09-04
+
+- Synchronize the node package with the Voice Studio FlashAttention 2.8.3 release.
+- Keep the ComfyUI host dependency policy and existing eight-node API unchanged.
+
+## 0.3.1 — 2026-09-04
+
+- Synchronize the node-package release version with the Voice Studio 0.3.1 distribution.
+- Keep the existing eight-node API and workflow behavior unchanged; this is a compatibility/version-contract release for the shared bundle.
+
+## 0.3.0 — 2026-09-04
+
+- Keep the desktop and ComfyUI distribution version contract aligned for the long-form voice-lock, Whisper Large-v3, pronunciation, and spatial-effects desktop release.
+
 ## 0.2.9 — 2026-09-03
 
 - Adds the T8star-Aix GitHub, Hugging Face, Bilibili, and YouTube links to the package documentation.

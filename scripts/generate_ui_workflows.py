@@ -13,7 +13,7 @@ from typing import Any
 from uuid import UUID
 
 
-PACKAGE_VERSION = "0.2.9"
+PACKAGE_VERSION = "0.3.4"
 EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "examples"
 INLINE_EVENT_GUIDE = (
     "行内声音事件｜中文：[笑] [咳嗽] [清嗓子] [叹气]｜"
@@ -269,7 +269,7 @@ def _reference_workflow(*, direction: bool) -> dict[str, Any]:
         widgets = [
             "[叹气] 很高兴再次听到你的声音。",
             "请替换为参考音频的准确逐字稿。",
-            "Speak clearly and naturally.",
+            "",
             1.0,
         ]
     nodes = [

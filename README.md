@@ -1,6 +1,6 @@
 # comfyui-breeze-tts-T8
 
-非官方 Breeze TTS 2 ComfyUI 配套节点。v0.2.9 提供 8 个可组合节点、四份可直接拖入画布的前端工作流，并在每份工作流中展示行内声音事件语法。
+非官方 Breeze TTS 2 ComfyUI 配套节点。v0.3.4 同步官方 2026-09-08 推理修复与模型许可 1.1：纯 Voice Clone 不再注入默认指令，只有显式填写 instruction 才切换为 Voice Direction；同时保留 8 个可组合节点、四份可直接拖入画布的前端工作流与行内声音事件语法。
 
 ## 安装
 
@@ -34,7 +34,7 @@ python -m pip install -r comfyui-breeze-tts-T8/requirements.txt
 - Python：`>=3.10,<3.13`
 - Transformers：`>=4.57,<6`
 - 已验证目标：Transformers 4.57.3 与 5.16.1；ComfyUI 0.34.0 / 前端 1.51.9 的画布工作流
-- Torch：沿用 ComfyUI 自己的版本；GPU 推理建议支持 BF16
+- Torch：沿用 ComfyUI 自己的版本；官方运行时使用 BF16，建议 Ampere（SM80）或更新的 NVIDIA GPU
 
 节点内置了 T5Gemma2 与 Qwen3 TTS codec 的跨版本兼容实现。4.57.x 使用随节点提供的 T5Gemma2 兼容层，5.x 优先使用 Transformers 自带实现；因版本变化产生的 causal-mask、StaticCache 和 RoPE 接口差异在节点内部适配。版本不在支持范围时会在节点注册阶段直接报告原因，不会静默覆盖宿主环境。
 
@@ -106,6 +106,8 @@ Request 和 Settings 会在模型恢复到 GPU 之前验证。空台词、空逐
 声音克隆与声音导演必须提供参考音频的准确逐字稿。模型仅限其许可证允许的研究、教育与非商业用途，详见 `MODEL_LICENSE`。
 参考音频最长 60 秒，节点会在上传到 GPU 和 Codec 编码前检查原始波形时长。
 
+`T8 声音克隆` 的可选 `instruction` 留空时走官方纯 Clone 模板；填写后会明确切换为 Direction。旧版音色包即使携带通用默认指令，只要声明为 Clone，继承时也会按纯 Clone 处理。
+
 ## T8star-Aix 社媒与资源
 
 - [B站](https://space.bilibili.com/385085361)
@@ -122,4 +124,4 @@ Request 和 Settings 会在模型恢复到 GPU 之前验证。空台词、空逐
 - GitHub：<https://github.com/T8mars/Comfyui-breeze-tts>
 - Comfy Registry Publisher：`t8star`
 - Registry 节点 ID：`comfyui-breeze-tts-T8`
-- 当前版本：`0.2.9`
+- 当前版本：`0.3.4`

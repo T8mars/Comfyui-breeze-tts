@@ -1,6 +1,6 @@
 [project]
 name = "comfyui-breeze-tts-T8"
-version = "0.2.9"
+version = "0.3.4"
 description = "Composable Breeze TTS 2 voice design, cloning, direction, and desktop voice-bundle nodes for ComfyUI"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
@@ -31,4 +31,4 @@ requires-comfyui = ">=0.33.0"
 
 [tool.breeze-tts-T8]
 transformers = ">=4.57,<6"
-official_model_revision = "c1c8ca18b70b30822735633991d9ebf4898e47d4"
+official_model_revision = "799624c0b4a1daa8db6d28bbd9850043c0270734"

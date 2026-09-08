@@ -99,7 +99,8 @@ def _validate_request_contract(request: Any) -> None:
     if mode not in {"design", "clone", "direction"}:
         raise ValueError("request.mode 必须是 design、clone 或 direction。")
     _required_text(request.get("text"), "text")
-    _required_text(request.get("instruction"), "instruction")
+    if mode in {"design", "direction"}:
+        _required_text(request.get("instruction"), "instruction")
     _finite_float(request.get("cfg_scale", 1.0), "cfg_scale", 0.1, 10.0)
     if mode in {"clone", "direction"}:
         _validate_audio_contract(request.get("reference_audio"))
@@ -243,7 +244,7 @@ class BreezeT8CloneRequest:
                 "reference_text": _text("参考音频的准确逐字稿。", "必须与参考音频准确对应。"),
             },
             "optional": {
-                "instruction": _text(runtime.DEFAULT_INSTRUCTION, "可选的自然语言表演指令。"),
+                "instruction": _text("", "留空为纯 Voice Clone；填写后按 Voice Direction 路由。"),
                 "cfg_scale": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),
             },
         }
@@ -252,18 +253,21 @@ class BreezeT8CloneRequest:
     RETURN_NAMES = ("request",)
     FUNCTION = "build"
     CATEGORY = CATEGORY
-    DESCRIPTION = "从参考音频与准确逐字稿创建声音克隆请求；text 支持行内声音事件。"
+    DESCRIPTION = "从参考音频与准确逐字稿创建纯声音克隆请求；填写 instruction 会明确切换为 Voice Direction。"
 
-    def build(self, text, reference_audio, reference_text, instruction=runtime.DEFAULT_INSTRUCTION, cfg_scale=1.0):
+    def build(self, text, reference_audio, reference_text, instruction="", cfg_scale=1.0):
         _validate_audio_contract(reference_audio)
-        return ({
-            "mode": "clone",
+        instruction = str(instruction or "").strip()
+        request = {
+            "mode": "direction" if instruction else "clone",
             "text": _required_text(text, "text"),
             "reference_audio": reference_audio,
             "reference_text": _required_text(reference_text, "reference_text"),
-            "instruction": _required_text(instruction, "instruction"),
             "cfg_scale": _finite_float(cfg_scale, "cfg_scale", 0.1, 10.0),
-        },)
+        }
+        if instruction:
+            request["instruction"] = instruction
+        return (request,)
 
 
 class BreezeT8DirectionRequest:
@@ -363,7 +367,7 @@ class BreezeT8VoiceBundleRequest:
             raise ValueError("line_direction_mode 必须是 inherit、override 或 neutral。")
         profile_mode = profile["mode"]
         has_reference = payload is not None
-        instruction = str(profile.get("instruction") or runtime.DEFAULT_INSTRUCTION).strip()
+        instruction = str(profile.get("instruction") or "").strip()
         request_mode = profile_mode
         if direction_mode == "override":
             instruction = str(line_direction or "").strip()
@@ -373,8 +377,18 @@ class BreezeT8VoiceBundleRequest:
             # retaining the same verified speaker reference.
             request_mode = "direction" if has_reference else "design"
         elif direction_mode == "neutral":
+            if has_reference:
+                instruction = ""
+                request_mode = "clone"
+            else:
+                instruction = runtime.DEFAULT_INSTRUCTION
+                request_mode = "design"
+        elif request_mode == "clone":
+            # Older voice bundles may carry a generic instruction even though
+            # their declared mode is Clone. Keep that route reference-only.
+            instruction = ""
+        elif not instruction:
             instruction = runtime.DEFAULT_INSTRUCTION
-            request_mode = "clone" if has_reference else "design"
 
         selected_cfg = float(cfg_scale)
         if selected_cfg == 0.0:
@@ -384,13 +398,14 @@ class BreezeT8VoiceBundleRequest:
         request = {
             "mode": request_mode,
             "text": text,
-            "instruction": instruction,
             "cfg_scale": selected_cfg,
             "language": profile["language"],
             "voice_id": profile["id"],
             "voice_name": profile["name"],
             "line_direction_mode": direction_mode,
         }
+        if instruction:
+            request["instruction"] = instruction
         if has_reference:
             request["reference_audio"] = reference_audio
             request["reference_text"] = profile["reference_text"]
@@ -447,8 +462,16 @@ class BreezeT8LineDirection:
             result["instruction"] = instruction
             result["mode"] = "direction" if has_reference else "design"
         elif mode == "neutral":
-            result["instruction"] = runtime.DEFAULT_INSTRUCTION
-            result["mode"] = "clone" if has_reference else "design"
+            if has_reference:
+                result.pop("instruction", None)
+                result["mode"] = "clone"
+            else:
+                result["instruction"] = runtime.DEFAULT_INSTRUCTION
+                result["mode"] = "design"
+        elif result.get("mode") == "clone":
+            # Normalize legacy clone requests that still contain the former
+            # default direction string.
+            result.pop("instruction", None)
         selected_cfg = float(cfg_scale)
         if selected_cfg != 0.0:
             if not 0.1 <= selected_cfg <= 10.0:
@@ -519,7 +542,8 @@ def _generate_audio(bundle, request: dict[str, Any], settings: dict[str, Any]) -
     text = str(request.get("text", "")).strip()
     if not text:
         raise ValueError("text 不能为空。")
-    instruction = str(request.get("instruction") or runtime.DEFAULT_INSTRUCTION).strip()
+    mode = str(request.get("mode") or "").strip().lower()
+    instruction = str(request.get("instruction") or "").strip()
     ref_audio = request.get("reference_audio")
     ref_text = str(request.get("reference_text") or "").strip() or None
     cfg_scale = float(request.get("cfg_scale", 1.0))
@@ -556,7 +580,12 @@ def _generate_audio(bundle, request: dict[str, Any], settings: dict[str, Any]) -
         cond = runtime.design_segments(text, instruction)
         negative = runtime.design_negative_segments(text)
     else:
-        cond = runtime.ref_segments(ref_text, text, instruction)
+        cond = runtime.ref_segments(
+            ref_text,
+            text,
+            instruction,
+            with_instruction=mode == "direction",
+        )
         negative = runtime.ref_segments(ref_text, text, instruction, with_instruction=False)
 
     with _isolated_rng(bundle, int(settings["seed"])) as actual_seed:

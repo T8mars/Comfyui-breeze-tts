@@ -24,7 +24,7 @@ logger = logging.getLogger("BreezeTTS2")
 
 MODEL_FOLDER_NAME = "breeze_tts"
 MODEL_REPO_ID = "BreezeBlue/Breeze-TTS-2"
-MODEL_REVISION = "c1c8ca18b70b30822735633991d9ebf4898e47d4"
+MODEL_REVISION = "799624c0b4a1daa8db6d28bbd9850043c0270734"
 HF_ENDPOINT = "https://huggingface.co"
 
 BF16_LABEL = "Official BF16 · BreezeBlue/Breeze-TTS-2"

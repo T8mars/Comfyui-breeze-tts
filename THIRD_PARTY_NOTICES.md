@@ -5,18 +5,18 @@ This is an unofficial integration and is not endorsed by BreezeBlue or RESONIA, 
 ## Breeze TTS 2 source code
 
 - Project: `breezeblue-ai/breeze-tts`
-- Source revision used by this distribution: `ca632ce6c4d05f7985da4eab29b1a5d445b43f7b`
+- Source revision synchronized by this distribution: `e2c5ac2f54fe15daa94237a7dbf31e446660a4c9`
 - License: Apache License 2.0 (`LICENSE`)
 
 ## Breeze TTS 2 model materials
 
 - Model: `BreezeBlue/Breeze-TTS-2`
-- Pinned revision: `c1c8ca18b70b30822735633991d9ebf4898e47d4`
-- License: BreezeBlue Research and Non-Commercial License Agreement (`MODEL_LICENSE`)
+- Pinned revision: `799624c0b4a1daa8db6d28bbd9850043c0270734`
+- License: BreezeBlue Research and Non-Commercial License Agreement version 1.1 (`MODEL_LICENSE`)
 
 Breeze TTS 2 is licensed under the BreezeBlue Research and Non-Commercial License Agreement. Copyright (c) 2026 RESONIA, INC. All Rights Reserved.
 
-Recipients must independently accept that agreement before downloading, accessing, or using model materials. Commercial use and non-consensual voice cloning are prohibited by that agreement.
+This node asks the local user to acknowledge the agreement before it downloads model materials. The open-weight model and self-hosted outputs remain non-commercial; BreezeBlue's paid hosted service has separate terms. Non-consensual voice cloning is prohibited.
 
 ## ComfyUI compatibility inference path
 
