@@ -138,7 +138,7 @@ class NodeGuardTests(unittest.TestCase):
         }
         with mock.patch.object(
             loader,
-            "resume_bundle_to_device",
+            "ensure_live_bundle",
             side_effect=AssertionError("invalid input must not touch model lifecycle"),
         ):
             with self.assertRaisesRegex(ValueError, "reference_text 不能为空"):
@@ -192,7 +192,7 @@ class NodeGuardTests(unittest.TestCase):
             "seed": 42,
         }
         with (
-            mock.patch.object(loader, "resume_bundle_to_device", return_value=None),
+            mock.patch.object(loader, "ensure_live_bundle", return_value=bundle),
             mock.patch.object(
                 nodes.runtime,
                 "encode_reference_audio",
@@ -201,6 +201,111 @@ class NodeGuardTests(unittest.TestCase):
             ):
             with self.assertRaisesRegex(ValueError, "超过 60 秒上限"):
                 nodes._generate_audio(bundle, request, settings)
+
+    def test_cached_bundle_reloads_after_comfy_unload_and_reuses_active_bundle(self):
+        load_request = (loader.BF16_LABEL, "auto", "auto", "auto", True, "eager")
+        load_key = ("model", "weights", 1, "cuda:0", "bf16", "auto", "eager")
+        cached = loader.BreezeBundle(
+            model=torch.nn.Module(),
+            codec=torch.nn.Module(),
+            tokenizer=object(),
+            model_dir=Path("model"),
+            weights_name="model.safetensors.index.json",
+            device=torch.device("cpu"),
+            dtype_name="fp32",
+            attention="auto",
+            load_request=load_request,
+            load_key=load_key,
+        )
+        fresh = loader.BreezeBundle(
+            model=torch.nn.Module(),
+            codec=torch.nn.Module(),
+            tokenizer=object(),
+            model_dir=Path("model"),
+            weights_name="model.safetensors.index.json",
+            device=torch.device("cpu"),
+            dtype_name="fp32",
+            attention="auto",
+            load_request=load_request,
+            load_key=load_key,
+        )
+        previous_bundle = loader._ACTIVE_BUNDLE
+        previous_key = loader._ACTIVE_LOAD_KEY
+
+        try:
+            loader._ACTIVE_BUNDLE = cached
+            loader._ACTIVE_LOAD_KEY = load_key
+            with (
+                mock.patch.object(loader, "_unregister_from_comfy", return_value=None),
+                mock.patch.object(loader, "_empty_accelerator_cache", return_value=None),
+            ):
+                loader._unload_breeze_bundle_locked(cached, reason="test lowvram unload", hard=True)
+            self.assertIsNone(cached.model)
+            self.assertIsNone(loader._ACTIVE_BUNDLE)
+
+            def fake_reload(*args):
+                self.assertEqual(args, load_request)
+                loader._ACTIVE_BUNDLE = fresh
+                loader._ACTIVE_LOAD_KEY = load_key
+                return fresh
+
+            self.assertTrue(loader.try_begin_generation())
+            try:
+                with mock.patch.object(loader, "load_breeze_bundle", side_effect=fake_reload) as reload_model:
+                    self.assertIs(loader.ensure_live_bundle(cached), fresh)
+                    reload_model.assert_called_once_with(*load_request)
+                with mock.patch.object(loader, "resume_bundle_to_device", return_value=None) as resume:
+                    self.assertIs(loader.ensure_live_bundle(cached), fresh)
+                    resume.assert_called_once_with(fresh)
+            finally:
+                loader.end_generation()
+        finally:
+            loader._ACTIVE_BUNDLE = previous_bundle
+            loader._ACTIVE_LOAD_KEY = previous_key
+
+    def test_generation_uses_bundle_recovered_from_cached_loader_output(self):
+        stale = SimpleNamespace(device=torch.device("cpu"))
+        live = SimpleNamespace(
+            model=object(),
+            codec=object(),
+            tokenizer=object(),
+            device=torch.device("cpu"),
+            attention="eager",
+        )
+        request = {
+            "mode": "design",
+            "text": "测试",
+            "instruction": "自然",
+            "cfg_scale": 1.0,
+        }
+        settings = {
+            "max_new_tokens": 256,
+            "temperature": 0.9,
+            "top_k": 50,
+            "top_p": 1.0,
+            "repetition_penalty": 1.1,
+            "depth_temperature": 0.9,
+            "depth_top_k": 50,
+            "depth_top_p": 1.0,
+            "seed": 42,
+        }
+
+        class RecoveredBundleReachedGeneration(Exception):
+            pass
+
+        def stop_after_recovery(model, *_args, **_kwargs):
+            self.assertIs(model, live.model)
+            raise RecoveredBundleReachedGeneration
+
+        with (
+            mock.patch.object(loader, "ensure_live_bundle", return_value=live) as ensure,
+            mock.patch.object(nodes.runtime, "design_segments", return_value=[]),
+            mock.patch.object(nodes.runtime, "design_negative_segments", return_value=[]),
+            mock.patch.object(nodes.runtime, "build_generation_batch", side_effect=stop_after_recovery),
+        ):
+            with self.assertRaises(RecoveredBundleReachedGeneration):
+                nodes._generate_audio(stale, request, settings)
+        ensure.assert_called_once_with(stale)
 
     def test_unload_waits_for_generation_lock(self):
         self.assertIs(nodes._GENERATION_LOCK, loader.GENERATION_LOCK)

@@ -1,6 +1,6 @@
 # comfyui-breeze-tts-T8
 
-非官方 Breeze TTS 2 ComfyUI 配套节点。v0.3.4 同步官方 2026-09-08 推理修复与模型许可 1.1：纯 Voice Clone 不再注入默认指令，只有显式填写 instruction 才切换为 Voice Direction；同时保留 8 个可组合节点、四份可直接拖入画布的前端工作流与行内声音事件语法。
+非官方 Breeze TTS 2 ComfyUI 配套节点。v0.3.5 修复 ComfyUI 在 low-VRAM/禁用智能显存模式下卸载模型后复用 Loader 缓存、导致连续生成报 `NoneType.config` 的问题；节点会在下一次生成时按原加载配置自动恢复模型。版本同时保留官方 Voice Clone/Design/Direction 路由、8 个可组合节点、四份可直接拖入画布的前端工作流与行内声音事件语法。
 
 ## 安装
 
@@ -124,4 +124,4 @@ Request 和 Settings 会在模型恢复到 GPU 之前验证。空台词、空逐
 - GitHub：<https://github.com/T8mars/Comfyui-breeze-tts>
 - Comfy Registry Publisher：`t8star`
 - Registry 节点 ID：`comfyui-breeze-tts-T8`
-- 当前版本：`0.3.4`
+- 当前版本：`0.3.5`

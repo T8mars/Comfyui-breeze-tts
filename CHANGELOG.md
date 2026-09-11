@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.5 — 2026-09-12
+
+- Recover a live model automatically when ComfyUI reuses a cached Loader output after low-VRAM or explicit model unloading.
+- Persist the exact model load request and resolved load key so repeated generations reuse the rebuilt active bundle instead of rebuilding it again.
+- Keep recovery inside the shared generation/lifecycle lock and add regression coverage for unload, cached-output recovery, and resumed generation.
+
 ## 0.3.4 — 2026-09-09
 
 - Synchronize the official Voice Clone/Design/Direction routing, including reference-only pure cloning and no implicit clone instruction.

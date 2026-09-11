@@ -471,14 +471,16 @@ def install_comfy_unload_hook() -> None:
 # --------------------------------------------------------------------------- #
 @dataclass
 class BreezeBundle:
-    model: nn.Module
-    codec: nn.Module
-    tokenizer: Any
+    model: nn.Module | None
+    codec: nn.Module | None
+    tokenizer: Any | None
     model_dir: Path
     weights_name: str
     device: torch.device
     dtype_name: str
     attention: str
+    load_request: tuple[str, str, str, str, bool, str] = field(default_factory=tuple, repr=False)
+    load_key: tuple[Any, ...] = field(default_factory=tuple, repr=False)
     decode_mode: str = "eager"
     quantized: bool = False
     patchers: list = field(default_factory=list)
@@ -486,6 +488,15 @@ class BreezeBundle:
 
 _ACTIVE_BUNDLE: BreezeBundle | None = None
 _ACTIVE_LOAD_KEY: tuple[Any, ...] | None = None
+
+
+def _bundle_is_live(bundle: BreezeBundle | None) -> bool:
+    return bool(
+        bundle is not None
+        and bundle.model is not None
+        and bundle.codec is not None
+        and bundle.tokenizer is not None
+    )
 
 
 def _dtype_policy(dtype_mode: str):
@@ -541,11 +552,14 @@ def load_breeze_bundle(
     index_mtime = (model_dir / weights_name).stat().st_mtime_ns
     load_key = (str(model_dir), weights_name, index_mtime, str(device), dtype_mode, attention_choice, decode_mode)
 
-    if _ACTIVE_BUNDLE is not None and _ACTIVE_LOAD_KEY == load_key:
+    if _bundle_is_live(_ACTIVE_BUNDLE) and _ACTIVE_LOAD_KEY == load_key:
         resume_bundle_to_device(_ACTIVE_BUNDLE)
         return _ACTIVE_BUNDLE
     if _ACTIVE_BUNDLE is not None:
-        unload_breeze_bundle(_ACTIVE_BUNDLE, reason="load settings changed")
+        if generation_owned_by_current_thread():
+            _unload_breeze_bundle_locked(_ACTIVE_BUNDLE, reason="load settings changed", hard=True)
+        else:
+            unload_breeze_bundle(_ACTIVE_BUNDLE, reason="load settings changed")
 
     from transformers import AutoTokenizer
 
@@ -589,6 +603,15 @@ def load_breeze_bundle(
         device=device,
         dtype_name=dtype_mode,
         attention=attention_choice,
+        load_request=(
+            repo_choice,
+            dtype_name,
+            device_name,
+            attention_choice,
+            bool(download_if_missing),
+            decode_mode,
+        ),
+        load_key=load_key,
         decode_mode=decode_mode,
         quantized=bool(quant_map),
     )
@@ -625,6 +648,40 @@ def load_breeze_bundle(
 
 def resume_bundle_to_device(bundle: BreezeBundle) -> None:
     _register_many_with_comfy(bundle.patchers)
+
+
+def ensure_live_bundle(bundle: BreezeBundle) -> BreezeBundle:
+    """Resolve a cached loader output to a live bundle while generation owns the lifecycle lock."""
+
+    global _ACTIVE_BUNDLE, _ACTIVE_LOAD_KEY
+
+    if not generation_owned_by_current_thread():
+        raise RuntimeError("恢复 Breeze TTS 2 模型前必须持有生成锁。")
+
+    if _ACTIVE_BUNDLE is bundle and _bundle_is_live(bundle):
+        resume_bundle_to_device(bundle)
+        return bundle
+
+    requested_key = tuple(getattr(bundle, "load_key", ()) or ())
+    if requested_key and _bundle_is_live(_ACTIVE_BUNDLE) and _ACTIVE_LOAD_KEY == requested_key:
+        resume_bundle_to_device(_ACTIVE_BUNDLE)
+        return _ACTIVE_BUNDLE
+
+    if _ACTIVE_BUNDLE is None and _bundle_is_live(bundle):
+        _ACTIVE_BUNDLE = bundle
+        _ACTIVE_LOAD_KEY = requested_key or None
+        resume_bundle_to_device(bundle)
+        return bundle
+
+    load_request = tuple(getattr(bundle, "load_request", ()) or ())
+    if len(load_request) != 6:
+        raise RuntimeError(
+            "ComfyUI 已卸载 Breeze TTS 2 模型，但缓存的加载信息不完整。"
+            "请重新执行 T8 模型加载器节点；更新节点后需重启 ComfyUI。"
+        )
+
+    logger.info("Reloading Breeze TTS 2 after ComfyUI released the cached bundle.")
+    return load_breeze_bundle(*load_request)
 
 
 def release_depth_graphs(model: nn.Module | None) -> None:

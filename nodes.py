@@ -548,7 +548,7 @@ def _generate_audio(bundle, request: dict[str, Any], settings: dict[str, Any]) -
     ref_text = str(request.get("reference_text") or "").strip() or None
     cfg_scale = float(request.get("cfg_scale", 1.0))
 
-    loader.resume_bundle_to_device(bundle)
+    bundle = loader.ensure_live_bundle(bundle)
     ref_codes = None
     reference_cache_hit = False
     if ref_audio is not None:
