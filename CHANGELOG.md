@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.6 — 2026-09-12
+
+- Align the ComfyUI package version with the desktop Fast All long-prompt patch release; node inference behavior is unchanged from 0.3.5.
+
 ## 0.3.5 — 2026-09-12
 
 - Recover a live model automatically when ComfyUI reuses a cached Loader output after low-VRAM or explicit model unloading.
