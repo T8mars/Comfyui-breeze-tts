@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.7 — 2026-09-18
+
+- Fix Issue #2: make T5Gemma2's scaled text embedding and the depth codebook head participate in ComfyUI weight casting, preserving embedding scaling and EOI substitution when weights are offloaded to CPU.
+- Restore model and codec together through ComfyUI before every generation, including already registered patchers; request full residency for CUDA Graphs.
+- Keep the codec fully resident during inference (its convolutions do not support paging), and rebuild depth graphs if restored weights have new addresses. Align audio-token offset buffers with CUDA token inputs.
+- Remove the actual ModelPatcher from ComfyUI's loaded-model registry during unload, rather than incorrectly matching its underlying module.
+- Add regressions for CPU/CUDA embedding placement, paging cast/cleanup, embedding math and state-dict compatibility, model registration and graph residency.
+- This is a standalone node patch release; the desktop portable distribution remains at 0.3.6.
+
 ## 0.3.6 — 2026-09-12
 
 - Align the ComfyUI package version with the desktop Fast All long-prompt patch release; node inference behavior is unchanged from 0.3.5.

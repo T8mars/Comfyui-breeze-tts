@@ -1,6 +1,6 @@
 # comfyui-breeze-tts-T8
 
-非官方 Breeze TTS 2 ComfyUI 配套节点。v0.3.6 与桌面整合包补丁版本对齐；节点继续包含 v0.3.5 的 low-VRAM 自动恢复修复，避免 ComfyUI 复用已释放的 Loader 缓存后出现 `NoneType.config`。版本同时保留官方 Voice Clone/Design/Direction 路由、8 个可组合节点、四份可直接拖入画布的前端工作流与行内声音事件语法。
+非官方 Breeze TTS 2 ComfyUI 配套节点。v0.3.7 修复 Issue #2：连续运行或显存卸载后，特殊文本嵌入层的 CPU 权重与 CUDA 输入混用，触发 `wrapper_CUDA__index_select`。保留 v0.3.5 的 Loader 缓存自动恢复、官方 Voice Clone/Design/Direction 路由、8 个可组合节点、四份前端工作流与行内声音事件语法。本次仅发布节点补丁，桌面整合包仍为 v0.3.6。更新节点后请重启 ComfyUI。
 
 ## 安装
 
@@ -124,4 +124,4 @@ Request 和 Settings 会在模型恢复到 GPU 之前验证。空台词、空逐
 - GitHub：<https://github.com/T8mars/Comfyui-breeze-tts>
 - Comfy Registry Publisher：`t8star`
 - Registry 节点 ID：`comfyui-breeze-tts-T8`
-- 当前版本：`0.3.6`
+- 当前节点版本：`0.3.7`（桌面整合包：`0.3.6`）

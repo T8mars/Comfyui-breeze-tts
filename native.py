@@ -145,8 +145,13 @@ try:
     _uncast_bias_weight = _comfy_ops.uncast_bias_weight
 except Exception:
 
-    def _cast_bias_weight(module, x, *args, **kwargs):
-        return module.weight, module.bias, None
+    def _cast_bias_weight(module, x=None, *, dtype=None, device=None, **kwargs):
+        if x is not None:
+            dtype = dtype or x.dtype
+            device = device or x.device
+        weight = module.weight.to(device=device, dtype=dtype)
+        bias = module.bias.to(device=device, dtype=dtype) if module.bias is not None else None
+        return weight, bias, None
 
     def _uncast_bias_weight(module, weight, bias, stream=None):
         return None
@@ -614,26 +619,33 @@ class BreezeDepthDecoderModel(nn.Module):
 
 
 class BreezeCodebooksHead(nn.Module):
+    comfy_cast_weights = True
+    weight_function = []
+    bias_function = []
+    bias = None
+
     def __init__(self, hidden_size, num_codebooks, vocab_size):
         super().__init__()
         self.num_codebooks = num_codebooks
         self.weight = nn.Parameter(torch.empty(self.num_codebooks - 1, hidden_size, vocab_size))
 
     def forward(self, hidden_states, cache_position=None):
-        if cache_position is None:
-            seq_length = hidden_states.shape[1]
-            codebook_weight = self.weight[torch.arange(seq_length)]
+        if not hasattr(self, "_v") and self.weight.device == hidden_states.device:
+            weight, bias, stream = self.weight, None, None
         else:
-            codebook_idxs = cache_position - 1
-            codebook_weight = self.weight[codebook_idxs]
-        hidden_states = [
-            nn.functional.linear(
-                hidden_states[:, codebook_idx, :], codebook_weight[codebook_idx].T
+            weight, bias, stream = _cast_bias_weight(self, hidden_states, offloadable=True)
+        try:
+            codebook_idxs = (
+                torch.arange(hidden_states.shape[1], device=hidden_states.device)
+                if cache_position is None else cache_position.to(hidden_states.device) - 1
             )
-            for codebook_idx in range(codebook_weight.shape[0])
-        ]
-        hidden_states = torch.stack(hidden_states, dim=1)
-        return hidden_states
+            codebook_weight = weight[codebook_idxs]
+            return torch.stack([
+                F.linear(hidden_states[:, index, :], codebook_weight[index].T)
+                for index in range(codebook_weight.shape[0])
+            ], dim=1)
+        finally:
+            _uncast_bias_weight(self, weight, bias, stream)
 
     def extra_repr(self):
         return f"weight_shape={list(self.weight.shape)}, num_codebooks={self.num_codebooks}"
@@ -668,7 +680,9 @@ class BreezeBackboneModelEmbeddings(nn.Module):
         )
 
     def forward(self, input_ids):
-        input_embeds = self.embed_audio_tokens(input_ids + self.audio_tokens_offsets)
+        input_embeds = self.embed_audio_tokens(
+            input_ids + self.audio_tokens_offsets.to(input_ids.device)
+        )
         if self.audio_embeds_projector:
             input_embeds = self.audio_embeds_projector(input_embeds)
         input_embeds = input_embeds.sum(dim=2)
@@ -942,6 +956,19 @@ class _ComfyEmbedding(nn.Embedding):
             _uncast_bias_weight(self, weight, bias, stream)
 
 
+class _ComfyT5Gemma2Embedding(_ComfyEmbedding, T5Gemma2TextScaledWordEmbedding):
+    def forward(self, input_ids):
+        embeddings = super().forward(input_ids)
+        embeddings = embeddings * self.embed_scale.to(
+            device=embeddings.device, dtype=embeddings.dtype
+        )
+        return torch.where(
+            (input_ids == self.eoi_token_index).unsqueeze(-1),
+            self.eoi_embedding.to(device=embeddings.device, dtype=embeddings.dtype),
+            embeddings,
+        )
+
+
 def _comfy_rmsnorm_forward(self, hidden_states):
     # BreezeRMSNorm / Qwen3RMSNorm math: fp32 variance, weight * normed
     input_dtype = hidden_states.dtype
@@ -998,6 +1025,8 @@ def convert_modules_for_comfy(model: nn.Module) -> None:
             continue
         if isinstance(module, nn.Linear):
             module.__class__ = _ComfyLinear
+        elif isinstance(module, T5Gemma2TextScaledWordEmbedding):
+            module.__class__ = _ComfyT5Gemma2Embedding
         elif type(module) is nn.Embedding:
             module.__class__ = _ComfyEmbedding
         elif isinstance(module, BreezeRMSNorm) or module.__class__.__name__ == "Qwen3RMSNorm":

@@ -98,6 +98,13 @@ if model_patcher is not None:
             except Exception:
                 pass
 
+    class _BreezeResidentModelPatcher(_BreezeModelPatcher):
+        def partially_load(self, device_to, extra_memory=0, force_patch_weights=False):
+            # The codec has non-castable convolutions; CUDA graphs retain
+            # weight addresses. Both require full residency during inference.
+            load_budget = extra_memory if extra_memory < 0 else 1e32
+            return super().partially_load(device_to, load_budget, force_patch_weights=force_patch_weights)
+
     _DynamicBase = getattr(model_patcher, "ModelPatcherDynamic", None)
     if _DynamicBase is not None:
         class _BreezeModelPatcherDynamic(_DynamicBase):
@@ -110,6 +117,7 @@ if model_patcher is not None:
         _BreezeModelPatcherDynamic = None
 else:
     _BreezeModelPatcher = None
+    _BreezeResidentModelPatcher = None
     _BreezeModelPatcherDynamic = None
 
 
@@ -338,17 +346,14 @@ def _ensure_writable_device_property(module: nn.Module) -> None:
     module.__class__ = new_cls
 
 
-def _register_many_with_comfy(patchers: list) -> None:
+def _register_many_with_comfy(patchers: list, *, force_full_load: bool = False) -> None:
     if mm is None:
         return
-    to_load = []
-    already = {id(loaded.model) for loaded in mm.current_loaded_models}
-    for patcher in patchers:
-        if patcher is None or id(patcher.model) in already:
-            continue
-        to_load.append(patcher)
+    # A registered patcher can still have offloaded weights. Let ComfyUI
+    # restore residency and protect all requested models from eviction together.
+    to_load = [patcher for patcher in patchers if patcher is not None]
     if to_load:
-        mm.load_models_gpu(to_load)
+        mm.load_models_gpu(to_load, force_full_load=force_full_load)
         logger.debug("Loaded %d module(s) through ComfyUI memory management.", len(to_load))
 
 
@@ -359,13 +364,15 @@ def register_runtime_module(module: nn.Module, device: torch.device, *, dynamic:
         module.to(device)
         return None
     use_dynamic = dynamic_vram_active(device) and dynamic is not False
-    if use_dynamic and _BreezeModelPatcherDynamic is not None:
+    if dynamic is False:
+        patcher_class = _BreezeResidentModelPatcher
+    elif use_dynamic and _BreezeModelPatcherDynamic is not None:
         patcher_class = _BreezeModelPatcherDynamic
     else:
         patcher_class = _BreezeModelPatcher
     patcher = patcher_class(module, load_device=device, offload_device=torch.device("cpu"))
     module.model_loaded_weight_memory = 0
-    _register_many_with_comfy([patcher])
+    _register_many_with_comfy([patcher], force_full_load=dynamic is False)
     if not patcher.is_dynamic():
         module.device = torch.device(device)
     return patcher
@@ -375,7 +382,7 @@ def _unregister_from_comfy(patcher) -> None:
     if patcher is None or mm is None:
         return
     for loaded in list(mm.current_loaded_models):
-        if id(loaded.model) == id(patcher.model):
+        if loaded.model is patcher:
             if getattr(loaded, "model_finalizer", None) is not None:
                 loaded.model_finalizer.detach()
             if getattr(loaded, "_patcher_finalizer", None) is not None:
@@ -484,6 +491,7 @@ class BreezeBundle:
     decode_mode: str = "eager"
     quantized: bool = False
     patchers: list = field(default_factory=list)
+    depth_weight_signature: tuple = field(default_factory=tuple, repr=False)
 
 
 _ACTIVE_BUNDLE: BreezeBundle | None = None
@@ -629,12 +637,13 @@ def load_breeze_bundle(
         patcher = register_runtime_module(codec, device, dynamic=False)
         if patcher is not None:
             patchers.append(patcher)
+        bundle.patchers = patchers
+        resume_bundle_to_device(bundle)
     except Exception:
         for created in patchers:
             _unregister_from_comfy(created)
         unload_breeze_bundle(bundle, reason="registration failed", hard=True)
         raise
-    bundle.patchers = patchers
 
     if bundle.quantized:
         int8.log_int8_banner(model, device)
@@ -647,7 +656,17 @@ def load_breeze_bundle(
 
 
 def resume_bundle_to_device(bundle: BreezeBundle) -> None:
-    _register_many_with_comfy(bundle.patchers)
+    _register_many_with_comfy(bundle.patchers, force_full_load=bundle.decode_mode == "cuda_graphs")
+    if bundle.decode_mode == "cuda_graphs" and bundle.model is not None:
+        tensors = tuple(bundle.model.depth_decoder.parameters()) + tuple(bundle.model.depth_decoder.buffers())
+        if bundle.device.type == "cuda" and any(t.device != bundle.device for t in tensors):
+            raise RuntimeError("CUDA Graphs 需要深度解码器权重常驻显存。请关闭 --novram 或切换为 Eager 安全模式。")
+        signature = tuple((t.device, t.data_ptr(), t.dtype) for t in tensors)
+        if bundle.depth_weight_signature and bundle.depth_weight_signature != signature:
+            # CUDA graphs retain addresses from the previous weight allocation.
+            release_depth_graphs(bundle.model)
+            bundle.model._breeze_depth_runners = {}
+        bundle.depth_weight_signature = signature
 
 
 def ensure_live_bundle(bundle: BreezeBundle) -> BreezeBundle:
